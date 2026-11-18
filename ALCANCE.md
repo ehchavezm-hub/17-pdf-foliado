@@ -45,13 +45,25 @@ nunca se modifica.
 
 **a) Por documento (predeterminado)**
 Cada PDF recibe su propia secuencia, independiente de los demás.
-- Si el PDF tiene 15 páginas → páginas numeradas 0001 a 0015 (o 0015 a 0001).
+
+```
+Contrato.pdf   (12 págs.)  →  folios 0001 … 0012
+Anexo.pdf      ( 8 págs.)  →  folios 0001 … 0008
+Planos.pdf     ( 4 págs.)  →  folios 0001 … 0004
+```
 
 **b) Correlativo entre documentos**
-Los PDFs se ordenan (según el orden en que el usuario los arrastró o seleccionó) y reciben
-una secuencia continua de folios a través de todos los archivos.
-- PDF-A (5 págs.) + PDF-B (3 págs.) + PDF-C (4 págs.) → folios 0001–0012 en total.
-- Cada PDF de salida contiene el rango que le corresponde.
+Los PDFs se tratan como un solo expediente. La numeración no se corta entre archivos;
+el orden lo define el usuario arrastrando los elementos en la lista.
+
+```
+Contrato.pdf   (12 págs.)  →  folios 0001 … 0012
+Anexo.pdf      ( 8 págs.)  →  folios 0013 … 0020
+Planos.pdf     ( 4 págs.)  →  folios 0021 … 0024
+```
+
+Uso típico: expedientes legales o administrativos donde todas las hojas deben tener
+folio único de principio a fin.
 
 ### 2. Orden de numeración
 - **Ascendente:** primera página = 0001, última = N.

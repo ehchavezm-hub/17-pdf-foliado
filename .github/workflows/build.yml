@@ -35,6 +35,9 @@ jobs:
         working-directory: build
         run: pyinstaller --clean pdf-foliado.spec
 
+      - name: Add unblock script to dist
+        run: Copy-Item build\Desbloquear_y_Ejecutar.ps1 build\dist\pdf-foliado\
+
       - name: Create ZIP
         working-directory: build/dist
         run: |

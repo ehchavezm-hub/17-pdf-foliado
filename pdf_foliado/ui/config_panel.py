@@ -1,0 +1,309 @@
+"""Right pane — all stamping controls."""
+from __future__ import annotations
+from pathlib import Path
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QLabel, QPushButton, QButtonGroup, QSpinBox, QDoubleSpinBox,
+    QLineEdit, QComboBox, QScrollArea, QFrame, QSizePolicy, QApplication,
+)
+
+from pdf_foliado.config.preferences import Preferences
+from pdf_foliado.engine.batch import BatchConfig
+from pdf_foliado.engine.stamper import StampParams
+
+_FONTS = [
+    "Figtree", "Urbanist", "Jost", "Manrope", "Montserrat",
+    "Plus Jakarta Sans", "IBM Plex Sans", "Epilogue", "Syne",
+    "Tenor Sans", "Roboto", "Arial", "Calibri",
+]
+_PALETTE_TOKENS = {
+    "rojo":   {"accent": "#E4002B", "accent_h": "#b80022", "accent_bg": "#fff0f2"},
+    "azul":   {"accent": "#005EB8", "accent_h": "#004a92", "accent_bg": "#f0f4ff"},
+    "bosque": {"accent": "#1B7A4A", "accent_h": "#155f39", "accent_bg": "#f0fff6"},
+}
+
+
+def _build_stylesheet(skin: str) -> str:
+    from pdf_foliado.ui.main_window import _build_stylesheet as _mws
+    return _mws(skin)
+
+
+class _ToggleButton(QPushButton):
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setCheckable(True)
+        self.setObjectName("secondary")
+
+
+class ConfigPanel(QWidget):
+    config_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._skin = "rojo"
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        inner = QWidget()
+        lay = QVBoxLayout(inner)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(14)
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+        # --- Skin ---
+        lay.addWidget(self._section("Diseño de color"))
+        skin_row = QHBoxLayout()
+        self._skin_group = QButtonGroup(self)
+        self._skin_group.setExclusive(True)
+        for skin_name in ("rojo", "azul", "bosque"):
+            t = _PALETTE_TOKENS[skin_name]
+            btn = QPushButton("●")
+            btn.setCheckable(True)
+            btn.setFixedSize(28, 28)
+            btn.setProperty("skin_name", skin_name)
+            btn.setStyleSheet(
+                f"QPushButton{{background:{t['accent']};border-radius:14px;"
+                f"color:white;font-size:12px;padding:0;border:2px solid transparent;}}"
+                f"QPushButton:checked{{border:2px solid #231F20;}}"
+                f"QPushButton:hover{{background:{t['accent_h']};}}"
+            )
+            btn.toggled.connect(self._on_skin_toggled)
+            self._skin_group.addButton(btn)
+            skin_row.addWidget(btn)
+            if skin_name == "rojo":
+                btn.setChecked(True)
+        skin_row.addStretch()
+        lay.addLayout(skin_row)
+
+        # --- Modo ---
+        lay.addWidget(self._section("Modo de foliado"))
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.setExclusive(True)
+        mode_row = QHBoxLayout()
+        self._btn_por_doc = _ToggleButton("Por documento")
+        self._btn_correlativo = _ToggleButton("Correlativo")
+        self._btn_por_doc.setChecked(True)
+        self._mode_group.addButton(self._btn_por_doc, 0)
+        self._mode_group.addButton(self._btn_correlativo, 1)
+        mode_row.addWidget(self._btn_por_doc)
+        mode_row.addWidget(self._btn_correlativo)
+        mode_row.addStretch()
+        lay.addLayout(mode_row)
+        self._mode_example = QLabel("Cada PDF se folia desde 1")
+        self._mode_example.setStyleSheet("color: #757575; font-size: 11px;")
+        lay.addWidget(self._mode_example)
+        self._mode_group.idToggled.connect(self._on_mode_toggled)
+
+        # --- Orden ---
+        lay.addWidget(self._section("Orden de folios"))
+        self._order_group = QButtonGroup(self)
+        self._order_group.setExclusive(True)
+        order_row = QHBoxLayout()
+        self._btn_asc = _ToggleButton("0001 → N")
+        self._btn_desc = _ToggleButton("N → 0001")
+        self._btn_asc.setChecked(True)
+        self._order_group.addButton(self._btn_asc, 0)
+        self._order_group.addButton(self._btn_desc, 1)
+        order_row.addWidget(self._btn_asc)
+        order_row.addWidget(self._btn_desc)
+        order_row.addStretch()
+        lay.addLayout(order_row)
+
+        # --- Iniciar / Prefijo ---
+        form1 = QFormLayout()
+        self._spin_start = QSpinBox()
+        self._spin_start.setRange(1, 9999)
+        self._spin_start.setValue(1)
+        form1.addRow("Iniciar desde:", self._spin_start)
+        self._edit_prefix = QLineEdit()
+        self._edit_prefix.setPlaceholderText("ej. Folio ")
+        form1.addRow("Prefijo:", self._edit_prefix)
+        lay.addLayout(form1)
+
+        # --- Posición ---
+        lay.addWidget(self._section("Posición del folio"))
+        self._corner_group = QButtonGroup(self)
+        self._corner_group.setExclusive(True)
+        grid = QWidget()
+        grid_lay = QHBoxLayout(grid)
+        grid_lay.setSpacing(4)
+        self._corner_btns: dict[str, QPushButton] = {}
+        for corner in ("TL", "TR", "BL", "BR"):
+            label = {"TL": "↖ Sup-Izq", "TR": "↗ Sup-Der",
+                     "BL": "↙ Inf-Izq", "BR": "↘ Inf-Der"}[corner]
+            btn = _ToggleButton(label)
+            btn.setProperty("corner", corner)
+            self._corner_group.addButton(btn)
+            self._corner_btns[corner] = btn
+            grid_lay.addWidget(btn)
+        self._corner_btns["BR"].setChecked(True)
+        lay.addWidget(grid)
+
+        form2 = QFormLayout()
+        self._spin_d1 = QDoubleSpinBox()
+        self._spin_d1.setRange(1.0, 50.0)
+        self._spin_d1.setValue(10.0)
+        self._spin_d1.setSuffix(" mm")
+        form2.addRow("Distancia borde (d1):", self._spin_d1)
+        self._spin_d2 = QDoubleSpinBox()
+        self._spin_d2.setRange(1.0, 50.0)
+        self._spin_d2.setValue(15.0)
+        self._spin_d2.setSuffix(" mm")
+        form2.addRow("Distancia lateral (d2):", self._spin_d2)
+        lay.addLayout(form2)
+
+        # --- Tipografía ---
+        lay.addWidget(self._section("Tipografía"))
+        form3 = QFormLayout()
+        self._combo_font = QComboBox()
+        self._combo_font.addItems(_FONTS)
+        self._combo_font.setCurrentText("Roboto")
+        form3.addRow("Fuente:", self._combo_font)
+        self._combo_size = QComboBox()
+        self._combo_size.addItems(["10", "12", "14", "16"])
+        self._combo_size.setCurrentText("12")
+        form3.addRow("Tamaño:", self._combo_size)
+        lay.addLayout(form3)
+
+        # Folio color
+        self._color_group = QButtonGroup(self)
+        self._color_group.setExclusive(True)
+        color_row = QHBoxLayout()
+        for label, hex_val in [("Negro", "#231F20"), ("Blanco", "#FFFFFF"), ("Rojo", "#E4002B")]:
+            btn = _ToggleButton(label)
+            btn.setProperty("color_hex", hex_val)
+            self._color_group.addButton(btn)
+            color_row.addWidget(btn)
+            if label == "Negro":
+                btn.setChecked(True)
+        color_row.addStretch()
+        lay.addLayout(color_row)
+
+        # --- Sufijo ---
+        form4 = QFormLayout()
+        self._edit_suffix = QLineEdit("_fol")
+        form4.addRow("Sufijo archivo:", self._edit_suffix)
+        lay.addLayout(form4)
+
+        lay.addStretch()
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _section(title: str) -> QLabel:
+        lbl = QLabel(title)
+        lbl.setStyleSheet(
+            "font-weight: 700; font-size: 12px; color: #616161;"
+            "border-bottom: 1px solid #E0E0E0; padding-bottom: 2px;"
+        )
+        return lbl
+
+    def _on_mode_toggled(self, btn_id: int, checked: bool) -> None:
+        if not checked:
+            return
+        if btn_id == 0:
+            self._mode_example.setText("Cada PDF se folia desde 1")
+        else:
+            self._mode_example.setText("Los folios continúan entre PDFs")
+        self.config_changed.emit()
+
+    def _on_skin_toggled(self, checked: bool) -> None:
+        if not checked:
+            return
+        btn = self.sender()
+        skin = btn.property("skin_name")
+        if skin:
+            self._skin = skin
+            app = QApplication.instance()
+            if app:
+                from pdf_foliado.ui.main_window import _build_stylesheet
+                app.setStyleSheet(_build_stylesheet(skin))
+
+    # ------------------------------------------------------------------
+    def get_preferences(self) -> Preferences:
+        corner = "BR"
+        for c, btn in self._corner_btns.items():
+            if btn.isChecked():
+                corner = c
+                break
+
+        color_hex = "#231F20"
+        checked_color = self._color_group.checkedButton()
+        if checked_color:
+            color_hex = checked_color.property("color_hex")
+
+        return Preferences(
+            mode="por_documento" if self._btn_por_doc.isChecked() else "correlativo",
+            order="asc" if self._btn_asc.isChecked() else "desc",
+            start=self._spin_start.value(),
+            prefix=self._edit_prefix.text(),
+            corner=corner,
+            d1_mm=self._spin_d1.value(),
+            d2_mm=self._spin_d2.value(),
+            font_name=self._combo_font.currentText(),
+            font_size_pt=int(self._combo_size.currentText()),
+            color_hex=color_hex,
+            suffix_file=self._edit_suffix.text(),
+            skin=self._skin,
+        )
+
+    def set_preferences(self, prefs: Preferences) -> None:
+        self._skin = prefs.skin
+        if prefs.mode == "correlativo":
+            self._btn_correlativo.setChecked(True)
+        else:
+            self._btn_por_doc.setChecked(True)
+        if prefs.order == "desc":
+            self._btn_desc.setChecked(True)
+        else:
+            self._btn_asc.setChecked(True)
+        self._spin_start.setValue(prefs.start)
+        self._edit_prefix.setText(prefs.prefix)
+        if prefs.corner in self._corner_btns:
+            self._corner_btns[prefs.corner].setChecked(True)
+        self._spin_d1.setValue(prefs.d1_mm)
+        self._spin_d2.setValue(prefs.d2_mm)
+        idx = self._combo_font.findText(prefs.font_name)
+        if idx >= 0:
+            self._combo_font.setCurrentIndex(idx)
+        idx2 = self._combo_size.findText(str(prefs.font_size_pt))
+        if idx2 >= 0:
+            self._combo_size.setCurrentIndex(idx2)
+        for btn in self._color_group.buttons():
+            if btn.property("color_hex") == prefs.color_hex:
+                btn.setChecked(True)
+                break
+        self._edit_suffix.setText(prefs.suffix_file)
+        # apply skin to app
+        for btn in self._skin_group.buttons():
+            if btn.property("skin_name") == prefs.skin:
+                btn.setChecked(True)
+                break
+
+    def get_config(self, files: list[Path]) -> BatchConfig:
+        prefs = self.get_preferences()
+        return BatchConfig(
+            files=files,
+            mode=prefs.mode,
+            order=prefs.order,
+            start=prefs.start,
+            prefix=prefs.prefix,
+            suffix_file=prefs.suffix_file,
+            stamp=StampParams(
+                corner=prefs.corner,
+                d1_mm=prefs.d1_mm,
+                d2_mm=prefs.d2_mm,
+                font_name=prefs.font_name,
+                font_size_pt=prefs.font_size_pt,
+                color_hex=prefs.color_hex,
+            ),
+        )

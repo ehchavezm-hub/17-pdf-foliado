@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "pdf-foliado"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "PySide6>=6.7",
+    "pikepdf>=9.0",
+    "reportlab>=4.2",
+    "pypdfium2>=4.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-qt>=4.4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pdf_foliado*"]

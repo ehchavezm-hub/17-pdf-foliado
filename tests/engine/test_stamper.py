@@ -66,3 +66,43 @@ def test_prefix_in_folio(pdf_1p, tmp_path):
         pdf.save(out)
     # just verify it saves without error
     assert out.exists()
+
+
+def test_font_resource_key_matches_content_stream(pdf_1p, tmp_path):
+    """Font resource keys must match what the overlay content stream references."""
+    import re
+    out = tmp_path / "stamped.pdf"
+    with pikepdf.open(pdf_1p) as pdf:
+        stamp_page(pdf.pages[0], "0001", _default_params(), owner=pdf)
+        pdf.save(out)
+
+    with pikepdf.open(out) as pdf:
+        page = pdf.pages[0]
+        content = bytes(page["/Contents"].read_bytes()).decode("latin-1")
+        font_refs = set(re.findall(r'(/\w+)\s+[\d.]+\s+Tf', content))
+        font_keys = set(str(k) for k in page["/Resources"]["/Font"].keys())
+        for ref in font_refs:
+            assert ref in font_keys, (
+                f"Font {ref} referenced in content stream but missing from /Resources/Font"
+            )
+
+
+def test_blank_page_no_contents_stamps_successfully(pdf_1p, tmp_path):
+    """Stamping a page with no /Contents must not crash on save."""
+    # Strip /Contents from an existing page to simulate a blank page
+    p = tmp_path / "blank.pdf"
+    with pikepdf.open(pdf_1p) as pdf_src:
+        with pikepdf.open(pdf_1p) as pdf_blank:
+            if "/Contents" in pdf_blank.pages[0]:
+                del pdf_blank.pages[0]["/Contents"]
+            pdf_blank.save(p)
+
+    out = tmp_path / "blank_stamped.pdf"
+    with pikepdf.open(p) as pdf:
+        stamp_page(pdf.pages[0], "0001", _default_params(), owner=pdf)
+        pdf.save(out)
+
+    assert out.exists()
+    with pikepdf.open(out) as pdf:
+        assert len(pdf.pages) == 1
+        assert "/Contents" in pdf.pages[0]

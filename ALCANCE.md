@@ -86,13 +86,22 @@ Valores sugeridos basados en buenas prácticas administrativas:
 ### 5. Tipografía
 | Parámetro | Opciones | Predeterminado |
 |-----------|----------|----------------|
-| Fuente    | Roboto, Arial, Calibri | Roboto |
+| Fuente    | Ver lista completa abajo | Roboto |
 | Tamaño    | 10 / 12 / 14 / 16 pt | 10 pt |
 | Color     | Negro (fijo) | — |
 
-Las tres fuentes se incluyen en el paquete (Roboto: Apache 2.0; Arial y Calibri:
-redistribuibles con Windows — a verificar licencia antes de empaquetar; alternativa:
-sustituir por Liberation Sans si la redistribución no está permitida).
+**Fuentes disponibles** (todas de licencia OFL/Apache 2.0, incluidas en el paquete):
+
+| Grupo | Fuentes |
+|---|---|
+| Sin serif geométricas | Figtree, Urbanist, Jost, Manrope, Montserrat |
+| Sin serif humanistas | Plus Jakarta Sans, IBM Plex Sans, Epilogue |
+| Sin serif experimentales | Syne, Tenor Sans |
+| Serif Windows (sistema) | Arial, Calibri — verificar redistribución; si no está permitida, sustituir por Liberation Sans (SIL OFL) |
+
+Las fuentes OFL/Apache se incluyen directamente en el paquete. Arial y Calibri solo se
+incluyen si la licencia de Microsoft lo permite para distribución portable; en caso contrario
+se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 
 ### 6. Número de inicio
 - Campo configurable "Iniciar desde": por defecto 1.

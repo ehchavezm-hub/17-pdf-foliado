@@ -10,55 +10,8 @@ from PySide6.QtWidgets import (
 )
 
 from pdf_foliado.ui.file_list import FileListWidget
+from pdf_foliado.ui._theme import PALETTE_TOKENS, build_stylesheet
 from pdf_foliado.config.preferences import Preferences
-
-
-_PALETTE_TOKENS = {
-    "rojo":  {"accent": "#E4002B", "accent_h": "#b80022", "accent_bg": "#fff0f2"},
-    "azul":  {"accent": "#005EB8", "accent_h": "#004a92", "accent_bg": "#f0f4ff"},
-    "bosque": {"accent": "#1B7A4A", "accent_h": "#155f39", "accent_bg": "#f0fff6"},
-}
-
-
-def _build_stylesheet(skin: str) -> str:
-    t = _PALETTE_TOKENS.get(skin, _PALETTE_TOKENS["rojo"])
-    return f"""
-QMainWindow, QWidget {{
-    background-color: #FAFAFA;
-    color: #231F20;
-    font-family: "Roboto", "Segoe UI", sans-serif;
-    font-size: 13px;
-}}
-QPushButton {{
-    background-color: {t["accent"]};
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 16px;
-    font-weight: 600;
-}}
-QPushButton:hover {{ background-color: {t["accent_h"]}; }}
-QPushButton:disabled {{ background-color: #BDBDBD; }}
-QPushButton#secondary {{
-    background-color: transparent;
-    color: {t["accent"]};
-    border: 1px solid {t["accent"]};
-}}
-QPushButton#secondary:hover {{ background-color: {t["accent_bg"]}; }}
-QProgressBar {{
-    border: 1px solid #E0E0E0;
-    border-radius: 4px;
-    height: 8px;
-    text-align: center;
-}}
-QProgressBar::chunk {{ background-color: {t["accent"]}; border-radius: 4px; }}
-QListWidget {{
-    border: 1px solid #E0E0E0;
-    border-radius: 4px;
-    background: white;
-}}
-QListWidget::item:selected {{ background-color: {t["accent_bg"]}; color: #231F20; }}
-"""
 
 
 class MainWindow(QMainWindow):
@@ -71,13 +24,18 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("PDF Foliado")
         self.setMinimumSize(900, 600)
-        self._apply_skin(self._prefs.skin)
         self._build_ui()
+        # Apply skin after build so config_panel exists
+        self._apply_skin(self._prefs.skin)
 
     # ------------------------------------------------------------------
     def _apply_skin(self, skin: str) -> None:
+        """Apply stylesheet and keep config panel in sync."""
         self._prefs.skin = skin
-        QApplication.instance().setStyleSheet(_build_stylesheet(skin))
+        QApplication.instance().setStyleSheet(build_stylesheet(skin))
+        # Sync config panel skin state so get_preferences() returns the right value
+        if hasattr(self, "_config_panel"):
+            self._config_panel.sync_skin(skin)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -94,10 +52,10 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("font-size: 18px; font-weight: 700;")
         h_lay.addWidget(title)
         h_lay.addStretch()
-        for skin_name, label in [("rojo", "●"), ("azul", "●"), ("bosque", "●")]:
-            btn = QPushButton(label)
+        for skin_name in ("rojo", "azul", "bosque"):
+            t = PALETTE_TOKENS[skin_name]
+            btn = QPushButton("●")
             btn.setFixedSize(24, 24)
-            t = _PALETTE_TOKENS[skin_name]
             btn.setStyleSheet(
                 f"QPushButton{{background:{t['accent']};border-radius:12px;"
                 f"color:white;font-size:10px;padding:0;}}"
@@ -138,6 +96,7 @@ class MainWindow(QMainWindow):
         self._config_panel = ConfigPanel()
         self._config_panel.set_preferences(self._prefs)
         self._config_panel.config_changed.connect(self._on_config_changed)
+        self._config_panel.skin_changed.connect(self._apply_skin)
         cols.addWidget(self._config_panel, 3)
 
         root.addLayout(cols, 1)
@@ -211,6 +170,8 @@ class MainWindow(QMainWindow):
 
     @Slot(int, int)
     def _on_progress(self, current: int, total: int):
+        # Sync range to actual valid-file count in case some were rejected
+        self._progress.setRange(0, total)
         self._progress.setValue(current)
 
     @Slot(str, str)
@@ -223,6 +184,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_finished(self):
+        # Push progress to 100%
+        self._progress.setValue(self._progress.maximum())
         self._progress.setVisible(False)
         self._btn_cancel.setVisible(False)
         self._btn_foliar.setEnabled(True)

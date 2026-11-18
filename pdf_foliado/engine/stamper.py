@@ -38,7 +38,8 @@ class StampParams:
     color_hex: str       # e.g. "#231F20"
 
 
-def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams) -> pikepdf.Page:
+def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams,
+               owner: pikepdf.Pdf | None = None) -> pikepdf.Page:
     """Stamp folio_text onto page in-place. Returns the same page object."""
     x0, y0, w, h = get_page_box(page)
     rot = get_page_rotation(page)
@@ -82,9 +83,7 @@ def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams) -> pike
     # Coalesce page content to a single stream, then append overlay
     page.contents_coalesce()
     if "/Contents" not in page:
-        # Empty page — write directly using pikepdf stream manipulation
-        # We need the owning PDF; use a workaround via repr of the obj
-        _write_fresh_content(page, overlay_content)
+        _write_fresh_content(page, overlay_content, owner=owner)
     else:
         content_obj = page["/Contents"]
         existing = bytes(content_obj.read_raw_bytes())
@@ -140,14 +139,11 @@ def _ensure_font_resource(page: pikepdf.Page, font_name: str) -> None:
     )
 
 
-def _write_fresh_content(page: pikepdf.Page, content: bytes) -> None:
+def _write_fresh_content(page: pikepdf.Page, content: bytes,
+                         owner: pikepdf.Pdf | None = None) -> None:
     """Write content to a page that has no /Contents yet."""
-    # reportlab-generated content uses /F1 as font key; we need to remap.
-    # Since we control the content, just use it directly wrapped in q/Q.
-    # The font resource was already added by _ensure_font_resource.
-    # For pages without content, re-use the pikepdf approach via raw dict write.
-    # Note: this path rarely triggers for normal PDFs.
-    page["/Contents"] = pikepdf.Stream(pikepdf.Pdf.new(), b"q\n" + content + b"\nQ\n")
+    pdf = owner or pikepdf.Pdf.new()
+    page["/Contents"] = pikepdf.Stream(pdf, b"q\n" + content + b"\nQ\n")
 
 
 def _rl_font_name(font_name: str) -> str:

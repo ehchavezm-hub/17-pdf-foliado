@@ -4,8 +4,6 @@ import json
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-_PREFS_FILE = Path("datos") / "preferencias.json"
-
 
 @dataclass
 class Preferences:

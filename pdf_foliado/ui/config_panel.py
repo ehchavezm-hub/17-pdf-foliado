@@ -6,28 +6,19 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QButtonGroup, QSpinBox, QDoubleSpinBox,
-    QLineEdit, QComboBox, QScrollArea, QFrame, QSizePolicy, QApplication,
+    QLineEdit, QComboBox, QScrollArea, QFrame, QApplication,
 )
 
 from pdf_foliado.config.preferences import Preferences
 from pdf_foliado.engine.batch import BatchConfig
 from pdf_foliado.engine.stamper import StampParams
+from pdf_foliado.ui._theme import PALETTE_TOKENS, build_stylesheet
 
 _FONTS = [
     "Figtree", "Urbanist", "Jost", "Manrope", "Montserrat",
     "Plus Jakarta Sans", "IBM Plex Sans", "Epilogue", "Syne",
     "Tenor Sans", "Roboto", "Arial", "Calibri",
 ]
-_PALETTE_TOKENS = {
-    "rojo":   {"accent": "#E4002B", "accent_h": "#b80022", "accent_bg": "#fff0f2"},
-    "azul":   {"accent": "#005EB8", "accent_h": "#004a92", "accent_bg": "#f0f4ff"},
-    "bosque": {"accent": "#1B7A4A", "accent_h": "#155f39", "accent_bg": "#f0fff6"},
-}
-
-
-def _build_stylesheet(skin: str) -> str:
-    from pdf_foliado.ui.main_window import _build_stylesheet as _mws
-    return _mws(skin)
 
 
 class _ToggleButton(QPushButton):
@@ -39,6 +30,7 @@ class _ToggleButton(QPushButton):
 
 class ConfigPanel(QWidget):
     config_changed = Signal()
+    skin_changed = Signal(str)   # emitted when user picks a skin
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -65,8 +57,9 @@ class ConfigPanel(QWidget):
         skin_row = QHBoxLayout()
         self._skin_group = QButtonGroup(self)
         self._skin_group.setExclusive(True)
+        self._skin_btns: dict[str, QPushButton] = {}
         for skin_name in ("rojo", "azul", "bosque"):
-            t = _PALETTE_TOKENS[skin_name]
+            t = PALETTE_TOKENS[skin_name]
             btn = QPushButton("●")
             btn.setCheckable(True)
             btn.setFixedSize(28, 28)
@@ -79,6 +72,7 @@ class ConfigPanel(QWidget):
             )
             btn.toggled.connect(self._on_skin_toggled)
             self._skin_group.addButton(btn)
+            self._skin_btns[skin_name] = btn
             skin_row.addWidget(btn)
             if skin_name == "rojo":
                 btn.setChecked(True)
@@ -225,10 +219,19 @@ class ConfigPanel(QWidget):
             self._skin = skin
             app = QApplication.instance()
             if app:
-                from pdf_foliado.ui.main_window import _build_stylesheet
-                app.setStyleSheet(_build_stylesheet(skin))
+                app.setStyleSheet(build_stylesheet(skin))
+            self.skin_changed.emit(skin)
 
     # ------------------------------------------------------------------
+    def sync_skin(self, skin: str) -> None:
+        """Update internal skin state without emitting skin_changed (avoids loops)."""
+        self._skin = skin
+        btn = self._skin_btns.get(skin)
+        if btn and not btn.isChecked():
+            btn.blockSignals(True)
+            btn.setChecked(True)
+            btn.blockSignals(False)
+
     def get_preferences(self) -> Preferences:
         corner = "BR"
         for c, btn in self._corner_btns.items():
@@ -257,7 +260,7 @@ class ConfigPanel(QWidget):
         )
 
     def set_preferences(self, prefs: Preferences) -> None:
-        self._skin = prefs.skin
+        self.sync_skin(prefs.skin)
         if prefs.mode == "correlativo":
             self._btn_correlativo.setChecked(True)
         else:
@@ -283,11 +286,6 @@ class ConfigPanel(QWidget):
                 btn.setChecked(True)
                 break
         self._edit_suffix.setText(prefs.suffix_file)
-        # apply skin to app
-        for btn in self._skin_group.buttons():
-            if btn.property("skin_name") == prefs.skin:
-                btn.setChecked(True)
-                break
 
     def get_config(self, files: list[Path]) -> BatchConfig:
         prefs = self.get_preferences()

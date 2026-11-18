@@ -73,8 +73,8 @@ class PreviewWidget(QLabel):
 
             w = pix.width()
             h = pix.height()
-            d1 = params.d1_mm * MM_TO_PT * self._scale / 72 * 96
-            d2 = params.d2_mm * MM_TO_PT * self._scale / 72 * 96
+            d1 = params.d1_mm * MM_TO_PT * self._scale
+            d2 = params.d2_mm * MM_TO_PT * self._scale
             fs = params.font_size_pt * self._scale
             fm = painter.fontMetrics()
             text_w = fm.horizontalAdvance(folio_text)

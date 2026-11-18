@@ -107,7 +107,7 @@ class BatchWorker(QThread):
 
             for page, folio_num in zip(pdf.pages, folios):
                 folio_text = cfg.prefix + str(folio_num).zfill(4)
-                stamp_page(page, folio_text, cfg.stamp)
+                stamp_page(page, folio_text, cfg.stamp, owner=pdf)
 
             # Atomic write
             if self._output_dir:

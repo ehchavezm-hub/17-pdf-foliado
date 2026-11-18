@@ -95,12 +95,27 @@ Valores sugeridos basados en buenas prácticas administrativas:
 - Expedientes legales: d1 = 10 mm, d2 = 15 mm (esquina superior derecha).
 - Documentos A4 estándar: d1 = 8 mm, d2 = 10 mm.
 
+**Referencia de coordenadas:** siempre se usa el **CropBox** de cada página (zona visible
+para el usuario). Si la página no tiene CropBox, se usa el MediaBox. Las coordenadas
+se calculan página a página: si el PDF mezcla tamaños (A4 + A3, retrato + paisaje),
+los márgenes en mm se recalculan para cada página según sus dimensiones reales.
+Conversión exacta: 1 mm = 72 ÷ 25,4 pt ≈ 2,8346 pt.
+
+**Páginas rotadas** (campo `/Rotate` en el PDF): las coordenadas se aplican sobre la
+página ya desrotada (lo que el usuario ve). Si una página tiene `/Rotate: 90`, la esquina
+"inferior derecha visual" es la esquina "inferior izquierda del PDF crudo", y el motor
+debe compensarlo. El folio siempre aparece en la esquina que el usuario seleccionó,
+independientemente de la rotación interna del archivo.
+
 ### 5. Tipografía
 | Parámetro | Opciones | Predeterminado |
 |-----------|----------|----------------|
 | Fuente    | Ver lista completa abajo | Roboto |
 | Tamaño    | 10 / 12 / 14 / 16 pt | 10 pt |
-| Color     | Negro (fijo) | — |
+| Color     | Negro / Blanco / Rojo | Negro |
+
+El usuario elige el color del folio. Blanco y Rojo cubren los casos donde el negro
+no sería visible (páginas con fondo oscuro, planos de ingeniería).
 
 **Fuentes disponibles** (todas de licencia OFL/Apache 2.0, incluidas en el paquete):
 
@@ -128,9 +143,12 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 - Se pueden quitar archivos de la lista antes de procesar.
 - **No se aceptan imágenes directamente** (solo PDF). Si el usuario arrastra una imagen,
   mensaje claro: "Solo se aceptan archivos PDF."
-- **PDFs con contraseña:** se muestra un campo para ingresar la clave. En lotes, los archivos
-  protegidos quedan en estado "pendiente de clave"; el usuario puede ingresarlas una por una
-  o saltarlos. La clave nunca se guarda en disco.
+- **PDFs con contraseña de apertura:** se muestra un campo para ingresar la clave. En lotes,
+  los archivos protegidos quedan en estado "pendiente de clave"; el usuario puede ingresarlas
+  una por una o saltarlos. La clave nunca se guarda en disco.
+- **PDFs con permisos de modificación restringidos** (sin contraseña visible, solo flags
+  internos): pikepdf los procesa igual. Se muestra un aviso: "Este archivo tenía restricciones
+  de edición que fueron eliminadas en la copia foliada." El original no se toca.
 - **Páginas en blanco:** reciben folio igual que las demás (el folio corre sin interrupción).
   No se detectan ni se saltan páginas en blanco automáticamente.
 
@@ -153,7 +171,11 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 - El resumen se puede exportar como TXT simple (`reporte_foliado.txt`) con un clic.
 
 ### 11. Procesamiento
-- **Paralelo:** varios PDFs se procesan a la vez (un hilo por archivo, limitado por CPUs disponibles).
+- **Paralelo:** `min(CPUs_disponibles, 4)` archivos en simultáneo. El tope de 4 evita
+  saturar memoria con lotes grandes (ej. 50 PDFs arrastrando todos a la vez).
+- **Thread safety:** el procesamiento corre en hilos secundarios (`QThread` o
+  `concurrent.futures`). Toda actualización de la UI se hace exclusivamente via
+  `signals/slots` de Qt. Nunca se toca un widget directamente desde un hilo secundario.
 - **Cancelable:** botón "Cancelar" detiene el lote. Los archivos ya terminados se conservan.
 - **Tolerante a errores:** si un archivo falla, se marca en rojo, se sigue con los demás
   y al final se muestra el motivo del error.
@@ -169,8 +191,12 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
   exactamente posicionado y la fuente embebida; pikepdf la fusiona sobre la página original.
 - Licencias: PROHIBIDO cualquier componente AGPL, GPL o de uso no comercial.
   Mantener `LICENCIAS.md` con la licencia de cada dependencia.
-- Datos propios (preferencias guardadas) dentro de la carpeta portable (`pdf-foliado\datos\`),
-  nunca en el registro de Windows.
+- Datos propios dentro de la carpeta portable (`pdf-foliado\datos\`), nunca en el registro.
+  - `preferencias.json`: últimos valores usados de todos los parámetros (modo, orden,
+    iniciar desde, prefijo, posición, d1, d2, fuente, tamaño, color, sufijo). Se cargan
+    al iniciar y se guardan automáticamente al cerrar.
+  - `errores.log`: log rotativo (máx. 1 MB) con timestamp, nombre de archivo y traza del
+    error. No guarda contenido de los documentos. Sirve para diagnóstico en campo.
 
 ## Interfaz (PySide6)
 - **Pantalla única.** No hay navegación entre vistas.
@@ -182,7 +208,7 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
   - Prefijo: campo de texto.
   - Posición: 4 botones de esquina con icono.
   - Márgenes: d1 y d2 (spinbox en mm, predeterminados 10 y 15).
-  - Fuente: selector (Roboto / Arial / Calibri).
+  - Fuente: selector con las 13 fuentes disponibles (ver §5).
   - Tamaño: selector (10 / 12 / 14 / 16).
   - Sufijo de salida: campo de texto (predeterminado `_fol`).
 - Vista previa en tiempo real de la primera página con el folio superpuesto.
@@ -195,17 +221,22 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 ## Fuera de alcance
 - OCR, conversión de imágenes a PDF, edición de contenido.
 - Marcas de agua, sellos distintos al folio (logos, firmas).
-- PDFs con contraseña (en v0.1: mensaje claro "El archivo está protegido con contraseña").
 - Formato de salida distinto a PDF.
 
 ## Fases y criterios de aceptación
 1. **Núcleo:** estampado de folio en PDF monoarchivo, todos los parámetros, UI completa,
    modo claro/oscuro, empaquetado portable.
-   Criterio: procesar 10 PDFs variados (1–200 págs.) sin internet, resultado visualmente
-   correcto en el equipo de referencia.
-2. **Lotes y correlativo:** procesamiento paralelo multi-archivo, modo correlativo, cancelación.
-3. **Pulido:** preferencias guardadas, comparación de nomenclatura de salida en modo
-   correlativo, distribución en GitHub Releases.
+   Criterio: procesar 10 PDFs variados (1–200 págs.) sin internet; el folio aparece a
+   ±1 mm de la posición configurada en todos los archivos de prueba; no hay crashes en
+   el equipo de referencia.
+2. **Lotes y correlativo:** procesamiento paralelo (tope 4 hilos), modo correlativo,
+   cancelación, PDFs con contraseña, PDFs con rotación y tamaño mixto.
+   Criterio: lote de 20 PDFs procesado sin interrupción; modo correlativo produce
+   secuencia continua sin saltos; cancelar no deja archivos corruptos.
+3. **Pulido:** preferencias guardadas y restauradas al reiniciar, log de errores,
+   distribución en GitHub Releases.
+   Criterio: instalar desde ZIP en un equipo distinto al de desarrollo y procesar
+   10 PDFs sin ninguna configuración previa.
 
 Cada fase incluye tests con pytest. CI en GitHub Actions (runner Windows):
 tests + verificación de licencias + construcción del paquete (solo al publicar versiones).

@@ -165,7 +165,7 @@ class ConfigPanel(QWidget):
         self._combo_font.setCurrentText("Roboto")
         form3.addRow("Fuente:", self._combo_font)
         self._combo_size = QComboBox()
-        self._combo_size.addItems(["10", "12", "14", "16"])
+        self._combo_size.addItems(["10", "12", "14", "16", "18", "20", "22", "24", "26", "28", "30"])
         self._combo_size.setCurrentText("12")
         form3.addRow("Tamaño:", self._combo_size)
         lay.addLayout(form3)
@@ -174,7 +174,7 @@ class ConfigPanel(QWidget):
         self._color_group = QButtonGroup(self)
         self._color_group.setExclusive(True)
         color_row = QHBoxLayout()
-        for label, hex_val in [("Negro", "#231F20"), ("Blanco", "#FFFFFF"), ("Rojo", "#E4002B")]:
+        for label, hex_val in [("Negro", "#231F20"), ("Blanco", "#FFFFFF"), ("Rojo", "#E4002B"), ("Azul", "#005EB8"), ("Verde", "#1B7A4A")]:
             btn = _ToggleButton(label)
             btn.setProperty("color_hex", hex_val)
             self._color_group.addButton(btn)

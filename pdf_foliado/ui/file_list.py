@@ -1,8 +1,9 @@
-"""Left pane — drag-reorderable file list."""
+"""Left pane — drag-reorderable file list with external drop support."""
 from __future__ import annotations
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import QListWidget, QAbstractItemView, QListWidgetItem
 
 
@@ -11,9 +12,36 @@ class FileListWidget(QListWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setAlternatingRowColors(True)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        if event.mimeData().hasUrls():
+            paths = [
+                Path(u.toLocalFile())
+                for u in event.mimeData().urls()
+                if u.isLocalFile() and u.toLocalFile().lower().endswith(".pdf")
+            ]
+            if paths:
+                self.add_files(paths)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
 
     def add_files(self, paths: list[Path]) -> None:
         existing = {Path(self.item(i).data(0x0100)) for i in range(self.count())}

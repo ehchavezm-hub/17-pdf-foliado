@@ -34,6 +34,15 @@ nunca se modifica.
 4. **Aplicación gráfica de Windows, no de consola.** Sin ventana negra de DOS.
 5. **No modifica el original.** Siempre genera un archivo nuevo (`nombre_fol.pdf`).
    Si ya existe, se renombra (`nombre_fol (1).pdf`), nunca se sobrescribe.
+6. **El mejor foliador del mundo.** Maneja correctamente todos los casos reales:
+   páginas mixtas, rotadas, CropBox arbitrario, PDFs protegidos, correlativo exacto,
+   firmas digitales, PDF/A, rutas UNC. Ningún otro foliador gratuito debe superarlo
+   en precisión, control tipográfico ni robustez ante casos extremos.
+7. **Equilibrio entre potencia y ligereza.** La meta es un ZIP descargable **< 80 MB**.
+   Cada dependencia se justifica por su aporte real; nada entra por comodidad si añade
+   peso sin valor medible. PySide6 se incluye con los módulos mínimos; PyInstaller
+   excluye agresivamente módulos Python no usados. Funcionalidad sin concesiones,
+   huella mínima.
 
 ## Equipo objetivo
 - **Mínimo soportado:** Intel Core i5 de 11.ª generación, 8 GB de RAM,
@@ -143,12 +152,26 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 - Se pueden quitar archivos de la lista antes de procesar.
 - **No se aceptan imágenes directamente** (solo PDF). Si el usuario arrastra una imagen,
   mensaje claro: "Solo se aceptan archivos PDF."
+- **PDF de 0 páginas:** rechazado inmediatamente al agregar. Mensaje: "El archivo no
+  contiene páginas."
 - **PDFs con contraseña de apertura:** se muestra un campo para ingresar la clave. En lotes,
   los archivos protegidos quedan en estado "pendiente de clave"; el usuario puede ingresarlas
   una por una o saltarlos. La clave nunca se guarda en disco.
 - **PDFs con permisos de modificación restringidos** (sin contraseña visible, solo flags
   internos): pikepdf los procesa igual. Se muestra un aviso: "Este archivo tenía restricciones
   de edición que fueron eliminadas en la copia foliada." El original no se toca.
+- **PDFs con firma digital:** se detecta la presencia de firmas (`/Sig` en el PDF).
+  Aviso al agregar el archivo: "Este archivo tiene firma digital. La copia foliada tendrá
+  la firma invalidada." El usuario decide si continúa. El original nunca se modifica.
+- **PDFs con estándar PDF/A** (archivos de impresoras corporativas y escaneos): se detecta
+  el metadato `pdfaid:conformance`. Aviso: "Este archivo es PDF/A. El foliado puede
+  invalidar el estándar de archivo." El usuario decide si continúa.
+- **Archivo bloqueado por otro proceso** (ej. abierto en Adobe Reader): se captura el
+  `PermissionError` de Windows al intentar leer. Mensaje claro: "El archivo está en uso
+  por otro programa. Ciérralo e intente de nuevo."
+- **Rutas de red (UNC):** se soportan rutas `\\servidor\carpeta\archivo.pdf`. La lógica
+  de directorio de salida las trata igual que rutas locales; los errores de red se reportan
+  como errores del archivo correspondiente, sin detener el lote.
 - **Páginas en blanco:** reciben folio igual que las demás (el folio corre sin interrupción).
   No se detectan ni se saltan páginas en blanco automáticamente.
 
@@ -157,12 +180,21 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
   `Contrato_fol.pdf`. El usuario puede cambiar el sufijo en la configuración.
 - Si el directorio no tiene permiso de escritura: `Documentos\pdf-foliado\`.
 - Si el archivo de salida ya existe, se renombra (`Contrato_fol (1).pdf`), nunca se sobrescribe.
+- **Límite de ruta en Windows (260 caracteres):** antes de escribir se verifica que la ruta
+  completa del archivo de salida no supere 260 caracteres. Si la supera, se redirige
+  automáticamente a `Documentos\pdf-foliado\` y se anota en el reporte.
+- **Orden de fusión:** el overlay del folio se aplica **siempre en la capa superior**
+  del contenido existente de la página. En páginas con imágenes a sangre o fondo oscuro,
+  el folio queda visible sobre todo el contenido.
 
 ### 9. Vista previa
-- Antes de procesar, el panel muestra una miniatura de la primera página del PDF seleccionado
-  en la lista, con el folio superpuesto en la posición y formato configurados.
-- Se actualiza en tiempo real al cambiar posición, fuente, tamaño o prefijo.
-- No requiere procesar el archivo; solo renderiza la primera página con el overlay.
+- Antes de procesar, el panel muestra la primera página real del PDF seleccionado
+  (rasterizada con **pypdfium2**), con el folio superpuesto en la posición y formato
+  configurados.
+- Se actualiza en tiempo real al cambiar posición, fuente, tamaño, prefijo o color.
+- El overlay del preview se dibuja en Qt (no requiere procesar el archivo ni generar
+  un PDF temporal): pypdfium2 rasteriza la página, PySide6 dibuja el texto del folio
+  encima en las coordenadas calculadas.
 
 ### 10. Reporte al finalizar
 - Al terminar el lote, se muestra un resumen en pantalla:
@@ -171,32 +203,100 @@ se reemplazan por Liberation Sans sin pérdida de funcionalidad.
 - El resumen se puede exportar como TXT simple (`reporte_foliado.txt`) con un clic.
 
 ### 11. Procesamiento
-- **Paralelo:** `min(CPUs_disponibles, 4)` archivos en simultáneo. El tope de 4 evita
-  saturar memoria con lotes grandes (ej. 50 PDFs arrastrando todos a la vez).
-- **Thread safety:** el procesamiento corre en hilos secundarios (`QThread` o
-  `concurrent.futures`). Toda actualización de la UI se hace exclusivamente via
-  `signals/slots` de Qt. Nunca se toca un widget directamente desde un hilo secundario.
+
+**Fase 0 — Validación (siempre antes de estampar):**
+Al agregar archivos a la lista, cada PDF se abre y se valida:
+número de páginas, contraseña, firma digital, PDF/A, permisos. Los avisos se
+muestran antes de que el usuario pulse "Foliar".
+
+**Fase 1 — Pre-scan (solo en modo correlativo):**
+Antes de estampar el primer folio, se leen los recuentos de páginas de todos los
+archivos para calcular el rango de cada uno y el ancho de padding del número.
+Los archivos con contraseña pendiente bloquean el pre-scan; la UI los marca en
+amarillo y pide las claves faltantes antes de continuar.
+
+**Fase 2 — Estampado:**
+- **Paralelo:** `min(CPUs_disponibles, 4)` archivos en simultáneo.
+- **Thread safety:** procesamiento en hilos secundarios (`QThread` /
+  `concurrent.futures`). Toda actualización de UI exclusivamente via `signals/slots`.
+  Nunca se toca un widget desde un hilo secundario.
+- **Folio sobre bounds:** antes de estampar cada página se verifica que el texto del
+  folio cabe dentro del CropBox. Si no cabe (página muy pequeña o prefijo muy largo),
+  el archivo se marca con advertencia y el folio se recorta al borde de la página.
 - **Cancelable:** botón "Cancelar" detiene el lote. Los archivos ya terminados se conservan.
-- **Tolerante a errores:** si un archivo falla, se marca en rojo, se sigue con los demás
-  y al final se muestra el motivo del error.
-- **Escritura atómica:** cada archivo de salida se escribe en un temporal y se renombra
-  al terminar, para no dejar archivos corruptos si se interrumpe.
+- **Tolerante a errores:** si un archivo falla (incluido `PermissionError` por archivo
+  bloqueado), se marca en rojo, se sigue con los demás, el error queda en el log.
+- **Escritura atómica:** cada salida se escribe en un temporal y se renombra al terminar.
 
 ## Reglas técnicas
 - Python 3.13.
-- Interfaz: **PySide6** (Qt, LGPL).
+- Interfaz: **PySide6** (Qt, LGPL) — solo los módulos estrictamente necesarios
+  (`QtWidgets`, `QtGui`, `QtCore`). Se excluyen `QtWebEngine`, `QtMultimedia`,
+  `QtNetwork`, `Qt3D` y todos los módulos no usados para minimizar tamaño.
 - Empaquetado: PyInstaller `--onedir --noconsole`, sin compresión UPX.
-- **PDF:** pikepdf (MIT) para leer y fusionar páginas + reportlab (BSD) para generar
-  la capa de texto del folio. reportlab crea una página-overlay transparente con el folio
-  exactamente posicionado y la fuente embebida; pikepdf la fusiona sobre la página original.
+  Se usa `--exclude-module` agresivamente para eliminar módulos Python no usados
+  (unittest, doctest, email, html, http, xml, etc.). Meta: ZIP < 80 MB.
+- **PDF:**
+  - **pikepdf** (MIT): lectura, fusión de páginas, detección de firmas/PDF-A/permisos.
+  - **reportlab** (BSD): genera el overlay transparente con el folio exactamente
+    posicionado y la fuente embebida como subconjunto (solo los glifos usados).
+    El overlay va **siempre en la capa superior** de la página original.
+  - **pypdfium2** (Apache 2.0): rasteriza la primera página para la vista previa
+    en tiempo real. No se usa para el estampado definitivo.
 - Licencias: PROHIBIDO cualquier componente AGPL, GPL o de uso no comercial.
-  Mantener `LICENCIAS.md` con la licencia de cada dependencia.
+  Mantener `LICENCIAS.md` con la licencia de cada dependencia y cada fuente.
 - Datos propios dentro de la carpeta portable (`pdf-foliado\datos\`), nunca en el registro.
   - `preferencias.json`: últimos valores usados de todos los parámetros (modo, orden,
     iniciar desde, prefijo, posición, d1, d2, fuente, tamaño, color, sufijo). Se cargan
     al iniciar y se guardan automáticamente al cerrar.
   - `errores.log`: log rotativo (máx. 1 MB) con timestamp, nombre de archivo y traza del
     error. No guarda contenido de los documentos. Sirve para diagnóstico en campo.
+
+## Arquitectura de módulos
+
+```
+pdf_foliado/
+├── main.py                  # punto de entrada, arranca QApplication
+├── ui/
+│   ├── main_window.py       # ventana principal, layout dos columnas
+│   ├── file_list.py         # widget de lista reordenable con drag & drop
+│   ├── config_panel.py      # panel derecho con todos los parámetros
+│   └── preview_widget.py    # miniatura pypdfium2 + overlay Qt del folio
+├── engine/
+│   ├── stamper.py           # lógica principal: coordenadas, overlay, merge
+│   ├── validator.py         # validaciones: 0 págs, firma, PDF/A, permisos, bounds
+│   └── batch.py             # orquestador: pre-scan correlativo, cola de hilos
+├── config/
+│   ├── preferences.py       # carga/guarda preferencias.json
+│   └── logging_setup.py     # configura errores.log rotativo
+└── utils/
+    ├── pdf_info.py          # extrae metadatos: páginas, CropBox, Rotate, firma
+    └── path_utils.py        # manejo de rutas UNC, límite 260 chars, fallback
+```
+
+**Interfaz entre módulos:** `engine/stamper.py` expone una única función
+`stamp_page(page, folio_text, params) → page` sin dependencia de la UI.
+`engine/batch.py` emite `signals` Qt (progreso, error, listo) consumidas por la UI.
+
+## Estrategia de tests (pytest)
+
+- **Fixtures programáticas:** los PDFs de prueba se generan con reportlab al inicio
+  de la suite (`conftest.py`). No se commitean binarios PDF al repositorio.
+- **Casos obligatorios:**
+  - PDF de 1 página, 10 páginas, 200 páginas
+  - PDF con páginas de tamaño mixto (A4 + A3)
+  - PDF con páginas rotadas (90°, 180°, 270°)
+  - PDF con CropBox distinto al MediaBox
+  - PDF protegido con contraseña
+  - PDF con firma digital simulada
+  - PDF con estándar PDF/A-1b
+  - PDF de 0 páginas (debe rechazarse)
+  - Ruta de salida que supera 260 caracteres
+  - Folio que excede los límites de la página
+- **Tests unitarios:** `engine/stamper.py` y `engine/validator.py` se testean
+  sin UI ni disco (mocks de pikepdf).
+- **Tests de integración:** generan PDF real, lo estampan, abren el resultado
+  con pikepdf y verifican que el folio está en las coordenadas correctas (±1 pt).
 
 ## Interfaz (PySide6)
 - **Pantalla única.** No hay navegación entre vistas.

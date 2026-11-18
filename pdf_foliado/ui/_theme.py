@@ -33,6 +33,12 @@ QPushButton#secondary {{
     border: 1px solid {t["accent"]};
 }}
 QPushButton#secondary:hover {{ background-color: {t["accent_bg"]}; }}
+QPushButton#secondary:checked {{
+    background-color: {t["accent"]};
+    color: white;
+    border: 1px solid {t["accent"]};
+}}
+QPushButton#secondary:checked:hover {{ background-color: {t["accent_h"]}; }}
 QProgressBar {{
     border: 1px solid #E0E0E0;
     border-radius: 4px;

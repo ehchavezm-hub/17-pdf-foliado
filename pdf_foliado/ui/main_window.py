@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from pdf_foliado.ui.file_list import FileListWidget
 from pdf_foliado.ui._theme import PALETTE_TOKENS, build_stylesheet
+from pdf_foliado.ui.preview_widget import PreviewWidget
 from pdf_foliado.config.preferences import Preferences
 
 
@@ -80,12 +81,18 @@ class MainWindow(QMainWindow):
         self._file_list = FileListWidget()
         self._file_list.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._file_list.currentItemChanged.connect(self._on_file_selected)
         left.addWidget(self._file_list)
 
         btn_remove = QPushButton("Quitar seleccionados")
         btn_remove.setObjectName("secondary")
         btn_remove.clicked.connect(self._file_list.remove_selected)
         left.addWidget(btn_remove)
+
+        self._preview = PreviewWidget()
+        self._preview.setMinimumHeight(180)
+        self._preview.setMaximumHeight(240)
+        left.addWidget(self._preview)
 
         left_w = QWidget()
         left_w.setLayout(left)
@@ -131,6 +138,23 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_config_changed(self):
         self._prefs = self._config_panel.get_preferences()
+        self._refresh_preview()
+
+    def _refresh_preview(self) -> None:
+        item = self._file_list.currentItem()
+        if item is None:
+            return
+        path = Path(item.data(0x0100))
+        prefs = self._config_panel.get_preferences()
+        folio_text = f"{prefs.prefix}{prefs.start:04d}"
+        self._preview.load_pdf(path)
+        self._preview.update_folio(folio_text, self._config_panel.get_config([path]).stamp)
+
+    @Slot()
+    def _on_file_selected(self, current, previous) -> None:
+        if current is None:
+            return
+        self._refresh_preview()
 
     @Slot()
     def _on_add_files(self):
@@ -145,6 +169,7 @@ class MainWindow(QMainWindow):
         if not files:
             self._status_label.setText("No hay archivos para foliar.")
             return
+        self._file_list.reset_marks()
         self._run_batch(files)
 
     @Slot()
@@ -179,6 +204,7 @@ class MainWindow(QMainWindow):
     @Slot(str, str)
     def _on_file_done(self, src: str, dst: str):
         self._status_label.setText(f"OK: {Path(dst).name}")
+        self._file_list.mark_done(src)
 
     @Slot(str, str)
     def _on_file_error(self, src: str, err: str):

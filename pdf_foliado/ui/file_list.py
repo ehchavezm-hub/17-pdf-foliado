@@ -58,6 +58,24 @@ class FileListWidget(QListWidget):
         if added:
             self.files_changed.emit(self.get_ordered_files())
 
+    def mark_done(self, path: str) -> None:
+        """Mark an item as folioed with a green checkmark."""
+        name = Path(path).name
+        for i in range(self.count()):
+            item = self.item(i)
+            if item.data(0x0100) == path or item.text().lstrip("✓ ") == name:
+                item.setText(f"✓ {name}")
+                item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#1B7A4A"))
+                break
+
+    def reset_marks(self) -> None:
+        """Remove done marks (called before a new batch)."""
+        for i in range(self.count()):
+            item = self.item(i)
+            text = item.text().lstrip("✓ ")
+            item.setText(text)
+            item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#231F20"))
+
     def remove_selected(self) -> None:
         for item in self.selectedItems():
             self.takeItem(self.row(item))

@@ -82,8 +82,9 @@ def stamp_page(
     with pikepdf.open(buf) as overlay_pdf:
         overlay_page = overlay_pdf.pages[0]
         overlay_content = _get_content_bytes(overlay_page)
-        # Copy fonts under their original keys (preserves /F1, etc.)
-        _copy_overlay_fonts(page, overlay_page)
+        key_map = _copy_overlay_fonts(page, overlay_page)
+        # Patch content stream if any font key was renamed to avoid collisions
+        overlay_content = _remap_font_keys(overlay_content, key_map)
 
     # Coalesce page content to a single stream, then append overlay
     page.contents_coalesce()
@@ -119,16 +120,20 @@ def _get_content_bytes(page: pikepdf.Page) -> bytes:
         return bytes(cs.read_raw_bytes())
 
 
-def _copy_overlay_fonts(target_page: pikepdf.Page, overlay_page: pikepdf.Page) -> None:
-    """Copy font resources from overlay page to target page under original keys.
+def _copy_overlay_fonts(
+    target_page: pikepdf.Page, overlay_page: pikepdf.Page
+) -> dict[str, str]:
+    """Copy font resources from overlay page to target page.
 
-    This preserves the key (/F1, etc.) that the overlay content stream references,
-    avoiding a mismatch between resource keys and content stream font references.
+    Returns a mapping {original_key: target_key}. When the original key already
+    exists in the target page's resources, a unique replacement key is generated
+    so the caller can patch the overlay content stream accordingly.
     """
+    key_map: dict[str, str] = {}
     try:
         overlay_fonts = overlay_page["/Resources"]["/Font"]
     except KeyError:
-        return
+        return key_map
 
     if "/Resources" not in target_page:
         target_page["/Resources"] = pikepdf.Dictionary()
@@ -138,17 +143,39 @@ def _copy_overlay_fonts(target_page: pikepdf.Page, overlay_page: pikepdf.Page) -
     font_dict = res["/Font"]
 
     for key in overlay_fonts.keys():
-        if key not in font_dict:
-            src = overlay_fonts[key]
-            # Create a standalone font dict (no dependency on overlay_pdf after close)
-            new_font = pikepdf.Dictionary(
-                Type=pikepdf.Name("/Font"),
-                Subtype=src.get("/Subtype", pikepdf.Name("/Type1")),
-                BaseFont=src["/BaseFont"],
-            )
-            if "/Encoding" in src:
-                new_font["/Encoding"] = src["/Encoding"]
-            font_dict[key] = new_font
+        target_key = key
+        # If this key already exists in the target, pick a unique name to avoid
+        # clobbering the existing font and silently misdirecting the content stream.
+        if key in font_dict:
+            i = 0
+            while f"/FolF{i}" in font_dict:
+                i += 1
+            target_key = f"/FolF{i}"
+
+        src = overlay_fonts[key]
+        new_font = pikepdf.Dictionary(
+            Type=pikepdf.Name("/Font"),
+            Subtype=src.get("/Subtype", pikepdf.Name("/Type1")),
+            BaseFont=src["/BaseFont"],
+        )
+        if "/Encoding" in src:
+            new_font["/Encoding"] = src["/Encoding"]
+        font_dict[target_key] = new_font
+        key_map[key] = target_key
+
+    return key_map
+
+
+def _remap_font_keys(content: bytes, key_map: dict[str, str]) -> bytes:
+    """Patch font key references in a PDF content stream byte string."""
+    for old_key, new_key in key_map.items():
+        if old_key == new_key:
+            continue
+        # In PDF content streams font selection looks like: /F1 12 Tf
+        old_ref = old_key.encode() + b" "
+        new_ref = new_key.encode() + b" "
+        content = content.replace(old_ref, new_ref)
+    return content
 
 
 def _write_fresh_content(

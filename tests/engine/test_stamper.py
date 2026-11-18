@@ -115,6 +115,44 @@ def test_font_resource_key_matches_content_stream(tmp_path):
             )
 
 
+def test_stamp_pdf_with_preexisting_f1_font(tmp_path):
+    """Stamping a reportlab PDF (which already has /F1) must not silently misdirect the folio font.
+
+    The font key collision fix renames the overlay font to /FolF0 and patches the
+    content stream, so the folio still appears with the correct font.
+    After stamping, every font reference in the content stream must resolve to a
+    key that exists in the page's /Resources/Font dict.
+    """
+    # Build a reportlab PDF — it registers /F1 internally, so the target page
+    # already has /F1 in its resources before we stamp.
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.lib.pagesizes import A4
+    p = tmp_path / "rl_has_f1.pdf"
+    c = rl_canvas.Canvas(str(p), pagesize=A4)
+    c.setFont("Helvetica", 10)
+    c.drawString(50, 700, "Document with /F1 already set")
+    c.save()
+
+    out = tmp_path / "rl_has_f1_stamped.pdf"
+    with pikepdf.open(p) as pdf:
+        stamp_page(pdf.pages[0], "fox_0001", _default_params(), owning_pdf=pdf)
+        pdf.save(out)
+
+    with pikepdf.open(out) as pdf:
+        page = pdf.pages[0]
+        content = bytes(page["/Contents"].read_bytes()).decode("latin-1")
+        font_refs = set(re.findall(r'(/\w+)\s+[\d.]+\s+Tf', content))
+        font_keys = set(str(k) for k in page["/Resources"]["/Font"].keys())
+        assert len(font_refs) >= 2, (
+            "Expected at least 2 font references: one from the original doc and one for the folio"
+        )
+        for ref in font_refs:
+            assert ref in font_keys, (
+                f"Font {ref} referenced in content stream but not in /Resources/Font. "
+                f"Available keys: {font_keys}"
+            )
+
+
 def test_blank_page_no_contents_stamps_successfully(tmp_path):
     """Stamping a page with no /Contents must not crash on pdf.save()."""
     p = tmp_path / "blank.pdf"

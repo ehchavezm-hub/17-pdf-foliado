@@ -113,7 +113,13 @@ def _get_content_bytes(page: pikepdf.Page) -> bytes:
         return b""
     cs = page["/Contents"]
     if isinstance(cs, pikepdf.Array):
-        return b"".join(bytes(s.read_raw_bytes()) for s in cs)
+        parts = []
+        for s in cs:
+            try:
+                parts.append(bytes(s.read_bytes()))
+            except Exception:
+                parts.append(bytes(s.read_raw_bytes()))
+        return b"".join(parts)
     try:
         return bytes(cs.read_bytes())
     except Exception:

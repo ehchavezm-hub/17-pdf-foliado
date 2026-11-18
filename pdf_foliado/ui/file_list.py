@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import QListWidget, QAbstractItemView, QListWidgetItem
 
 
@@ -65,7 +65,7 @@ class FileListWidget(QListWidget):
             item = self.item(i)
             if item.data(0x0100) == path or item.text().lstrip("✓ ") == name:
                 item.setText(f"✓ {name}")
-                item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#1B7A4A"))
+                item.setForeground(QColor("#1B7A4A"))
                 break
 
     def reset_marks(self) -> None:
@@ -74,7 +74,7 @@ class FileListWidget(QListWidget):
             item = self.item(i)
             text = item.text().lstrip("✓ ")
             item.setText(text)
-            item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#231F20"))
+            item.setForeground(QColor("#231F20"))
 
     def remove_selected(self) -> None:
         for item in self.selectedItems():

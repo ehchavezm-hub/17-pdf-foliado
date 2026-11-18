@@ -40,6 +40,7 @@ class BatchWorker(QThread):
         self._output_dir = output_dir
         self._passwords: dict[str, str] = {}  # path → password
         self._cancelled = False
+        self._password_event = threading.Event()
 
     def provide_password(self, path: str, password: str) -> None:
         """Called from UI thread when user provides a password; unblocks the worker."""

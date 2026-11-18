@@ -1,6 +1,10 @@
 """Programmatic PDF fixtures — no binary files committed to repo."""
+import os
 import pytest
 from pathlib import Path
+
+# Ensure Qt uses offscreen rendering in CI and in environments without a display.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, A3
 import pikepdf

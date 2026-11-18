@@ -29,9 +29,15 @@ nunca se modifica.
 1. **100 % gratuito.** Solo librerías con licencia MIT, BSD, Apache 2.0 o LGPL (esta última
    solo con enlace dinámico). Sin servicios de pago, nube ni claves de API.
 2. **Absolutamente autónomo.** Funciona 100 % sin internet. Todo viene incluido.
-3. **Portable.** Se descomprime y funciona. Sin permisos de administrador,
-   sin modificar el registro. Ejecutable desde un USB.
-4. **Aplicación gráfica de Windows, no de consola.** Sin ventana negra de DOS.
+3. **Portable y totalmente autónomo.** Se descomprime y funciona. Sin instalación,
+   sin permisos de administrador, sin modificar el registro, sin intervención de TI.
+   Ejecutable desde un USB o carpeta de red. Todo lo necesario viene dentro del ZIP:
+   runtime de Python, librerías, fuentes. Cero dependencias externas.
+4. **Funciona en cualquier Windows de 64 bits.** Compatible con Windows 10 y 11,
+   en cualquier marca y modelo de equipo (Intel, AMD, ARM64 con capa de emulación).
+   No requiere VC++ Redistributable, .NET, ni ningún componente previo.
+   El primer doble clic funciona, sin mensajes de "falta una DLL".
+5. **Aplicación gráfica de Windows, no de consola.** Sin ventana negra de DOS.
 5. **No modifica el original.** Siempre genera un archivo nuevo (`nombre_fol.pdf`).
    Si ya existe, se renombra (`nombre_fol (1).pdf`), nunca se sobrescribe.
 6. **El mejor foliador del mundo.** Maneja correctamente todos los casos reales:
@@ -45,8 +51,12 @@ nunca se modifica.
    huella mínima.
 
 ## Equipo objetivo
-- **Mínimo soportado:** Intel Core i5 de 11.ª generación, 8 GB de RAM,
-  Windows 10/11 de 64 bits.
+- **Mínimo soportado:** cualquier CPU de 64 bits (Intel, AMD o ARM64 con emulación x64),
+  4 GB de RAM, Windows 10/11 de 64 bits. Sin requisito de tarjeta gráfica ni NPU.
+- **Entornos corporativos:** funciona en laptops administradas unidas a dominio,
+  sin necesidad de solicitar permisos a TI, sin pasar por lista blanca de instaladores.
+- **Sin dependencias del sistema:** el ZIP incluye todo. No se requiere instalar
+  VC++ Redistributable, .NET Framework, Python, ni ningún runtime adicional.
 
 ## Funcionalidad principal
 
@@ -236,6 +246,10 @@ amarillo y pide las claves faltantes antes de continuar.
 - Empaquetado: PyInstaller `--onedir --noconsole`, sin compresión UPX.
   Se usa `--exclude-module` agresivamente para eliminar módulos Python no usados
   (unittest, doctest, email, html, http, xml, etc.). Meta: ZIP < 80 MB.
+  El paquete final debe pasar la prueba **"primera ejecución en máquina limpia"**:
+  Windows 10/11 recién instalado, sin VC++ ni .NET adicionales, doble clic → funciona.
+  Se incluyen todas las DLLs de VC++ runtime necesarias dentro de la carpeta del exe.
+  Se verifica en CI con un runner Windows limpio antes de publicar cada release.
 - **PDF:**
   - **pikepdf** (MIT): lectura, fusión de páginas, detección de firmas/PDF-A/permisos.
   - **reportlab** (BSD): genera el overlay transparente con el folio exactamente

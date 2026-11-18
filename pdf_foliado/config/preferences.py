@@ -11,7 +11,7 @@ class Preferences:
     order: str = "asc"                # "asc" | "desc"
     start: int = 1
     prefix: str = ""
-    corner: str = "BR"                # "TL" | "TR" | "BL" | "BR"
+    corner: str = "BR"                # "TL" | "TC" | "TR" | "BL" | "BC" | "BR"
     d1_mm: float = 10.0
     d2_mm: float = 15.0
     font_name: str = "Roboto"

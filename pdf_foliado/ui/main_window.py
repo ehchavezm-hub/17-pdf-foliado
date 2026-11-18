@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QProgressBar, QLabel, QFileDialog,
@@ -22,6 +24,7 @@ class MainWindow(QMainWindow):
         self._base_dir = base_dir or Path.cwd()
         self._prefs = prefs or Preferences()
         self._worker = None
+        self._last_output_dir: Path | None = None
 
         self.setWindowTitle("PDF Foliado")
         self.setMinimumSize(900, 600)
@@ -82,7 +85,33 @@ class MainWindow(QMainWindow):
         self._file_list.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._file_list.currentItemChanged.connect(self._on_file_selected)
-        left.addWidget(self._file_list)
+        self._file_list.summary_changed.connect(self._on_summary_changed)
+
+        # List + ↑↓ buttons side by side
+        list_row = QHBoxLayout()
+        list_row.setSpacing(4)
+        list_row.addWidget(self._file_list)
+        move_col = QVBoxLayout()
+        move_col.setSpacing(4)
+        self._btn_up = QPushButton("↑")
+        self._btn_up.setObjectName("secondary")
+        self._btn_up.setFixedSize(28, 28)
+        self._btn_up.setToolTip("Subir archivo")
+        self._btn_up.clicked.connect(self._file_list.move_up)
+        self._btn_down = QPushButton("↓")
+        self._btn_down.setObjectName("secondary")
+        self._btn_down.setFixedSize(28, 28)
+        self._btn_down.setToolTip("Bajar archivo")
+        self._btn_down.clicked.connect(self._file_list.move_down)
+        move_col.addWidget(self._btn_up)
+        move_col.addWidget(self._btn_down)
+        move_col.addStretch()
+        list_row.addLayout(move_col)
+        left.addLayout(list_row, 1)
+
+        self._summary_label = QLabel("Sin archivos")
+        self._summary_label.setStyleSheet("color: #757575; font-size: 11px;")
+        left.addWidget(self._summary_label)
 
         btn_remove = QPushButton("Quitar seleccionados")
         btn_remove.setObjectName("secondary")
@@ -121,6 +150,13 @@ class MainWindow(QMainWindow):
         self._progress.setFixedWidth(200)
         self._progress.setVisible(False)
         bottom.addWidget(self._progress)
+
+        self._btn_open_output = QPushButton("Abrir carpeta")
+        self._btn_open_output.setObjectName("secondary")
+        self._btn_open_output.setVisible(False)
+        self._btn_open_output.setToolTip("Abrir carpeta de archivos foliados")
+        self._btn_open_output.clicked.connect(self._on_open_output)
+        bottom.addWidget(self._btn_open_output)
 
         self._btn_cancel = QPushButton("Cancelar")
         self._btn_cancel.setObjectName("secondary")
@@ -163,13 +199,24 @@ class MainWindow(QMainWindow):
         if paths:
             self._file_list.add_files([Path(p) for p in paths])
 
+    @Slot(int, int)
+    def _on_summary_changed(self, checked: int, pages: int) -> None:
+        if checked == 0:
+            self._summary_label.setText("Sin archivos seleccionados (✓)")
+        elif checked == 1:
+            pstr = f"{pages} pág" + ("s" if pages != 1 else "")
+            self._summary_label.setText(f"1 archivo  ·  {pstr}")
+        else:
+            self._summary_label.setText(f"{checked} archivos  ·  {pages} págs")
+
     @Slot()
     def _on_foliar(self):
-        files = self._file_list.get_ordered_files()
+        files = self._file_list.get_checked_files()
         if not files:
-            self._status_label.setText("No hay archivos para foliar.")
+            self._status_label.setText("No hay archivos con ✓ para foliar.")
             return
         self._file_list.reset_marks()
+        self._btn_open_output.setVisible(False)
         self._run_batch(files)
 
     @Slot()
@@ -205,6 +252,7 @@ class MainWindow(QMainWindow):
     def _on_file_done(self, src: str, dst: str):
         self._status_label.setText(f"OK: {Path(dst).name}")
         self._file_list.mark_done(src)
+        self._last_output_dir = Path(dst).parent
 
     @Slot(str, str)
     def _on_file_error(self, src: str, err: str):
@@ -212,13 +260,21 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_finished(self):
-        # Push progress to 100%
         self._progress.setValue(self._progress.maximum())
         self._progress.setVisible(False)
         self._btn_cancel.setVisible(False)
         self._btn_foliar.setEnabled(True)
         self._status_label.setText("Completado.")
         self._worker = None
+        if self._last_output_dir and self._last_output_dir.exists():
+            self._btn_open_output.setVisible(True)
+
+    @Slot()
+    def _on_open_output(self) -> None:
+        if self._last_output_dir and self._last_output_dir.exists():
+            QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(self._last_output_dir))
+            )
 
     @Slot(str, str)
     def _on_file_warning(self, src_path: str, msg: str) -> None:

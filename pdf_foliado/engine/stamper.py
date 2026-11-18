@@ -17,6 +17,8 @@ _CORNER_ROTATE: dict[tuple[str, int], str] = {
     ("TR", 0): "TR",   ("TR", 90): "TL",  ("TR", 180): "BL", ("TR", 270): "BR",
     ("BL", 0): "BL",   ("BL", 90): "BR",  ("BL", 180): "TR", ("BL", 270): "TL",
     ("BR", 0): "BR",   ("BR", 90): "TR",  ("BR", 180): "TL", ("BR", 270): "BL",
+    ("TC", 0): "TC",   ("TC", 90): "TC",  ("TC", 180): "BC", ("TC", 270): "BC",
+    ("BC", 0): "BC",   ("BC", 90): "BC",  ("BC", 180): "TC", ("BC", 270): "TC",
 }
 
 # Standard PDF Type1 fonts available without embedding
@@ -69,8 +71,12 @@ def stamp_page(
         tx, ty = x0 + d2, y0 + d1
     elif pdf_corner == "BR":
         tx, ty = x0 + w - d2 - text_width, y0 + d1
+    elif pdf_corner == "BC":
+        tx, ty = x0 + (w - text_width) / 2, y0 + d1
     elif pdf_corner == "TL":
         tx, ty = x0 + d2, y0 + h - d1 - fs
+    elif pdf_corner == "TC":
+        tx, ty = x0 + (w - text_width) / 2, y0 + h - d1 - fs
     else:  # TR
         tx, ty = x0 + w - d2 - text_width, y0 + h - d1 - fs
 

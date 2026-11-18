@@ -129,20 +129,27 @@ class ConfigPanel(QWidget):
         lay.addWidget(self._section("Posición del folio"))
         self._corner_group = QButtonGroup(self)
         self._corner_group.setExclusive(True)
-        grid = QWidget()
-        grid_lay = QHBoxLayout(grid)
-        grid_lay.setSpacing(4)
         self._corner_btns: dict[str, QPushButton] = {}
-        for corner in ("TL", "TR", "BL", "BR"):
-            label = {"TL": "↖ Sup-Izq", "TR": "↗ Sup-Der",
-                     "BL": "↙ Inf-Izq", "BR": "↘ Inf-Der"}[corner]
-            btn = _ToggleButton(label)
-            btn.setProperty("corner", corner)
-            self._corner_group.addButton(btn)
-            self._corner_btns[corner] = btn
-            grid_lay.addWidget(btn)
+        _labels = {
+            "TL": "↖ Sup-Izq", "TC": "↑ Sup-Cen", "TR": "↗ Sup-Der",
+            "BL": "↙ Inf-Izq", "BC": "↓ Inf-Cen", "BR": "↘ Inf-Der",
+        }
+        grid_w = QWidget()
+        grid_v = QVBoxLayout(grid_w)
+        grid_v.setContentsMargins(0, 0, 0, 0)
+        grid_v.setSpacing(4)
+        for row_corners in (("TL", "TC", "TR"), ("BL", "BC", "BR")):
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            for corner in row_corners:
+                btn = _ToggleButton(_labels[corner])
+                btn.setProperty("corner", corner)
+                self._corner_group.addButton(btn)
+                self._corner_btns[corner] = btn
+                row.addWidget(btn)
+            grid_v.addLayout(row)
         self._corner_btns["BR"].setChecked(True)
-        lay.addWidget(grid)
+        lay.addWidget(grid_w)
 
         form2 = QFormLayout()
         self._spin_d1 = QDoubleSpinBox()

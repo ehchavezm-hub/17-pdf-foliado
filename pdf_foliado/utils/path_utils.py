@@ -19,10 +19,13 @@ def safe_output_path(input_path: Path, suffix: str) -> Path:
     if not candidate.exists():
         return candidate
 
-    counter = 1
-    while True:
+    for counter in range(1, 10_000):
         name = f"{stem}{suffix} ({counter}).pdf"
         alt = candidate.parent / name
         if not alt.exists():
             return alt
-        counter += 1
+
+    raise FileExistsError(
+        f"No se pudo encontrar un nombre de salida disponible para '{stem}{suffix}.pdf' "
+        "después de 9999 intentos."
+    )

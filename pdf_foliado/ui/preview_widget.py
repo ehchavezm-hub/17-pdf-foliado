@@ -37,10 +37,11 @@ class PreviewWidget(QLabel):
         try:
             import pypdfium2 as pdfium
             doc = pdfium.PdfDocument(str(path))
-            page = doc[0]
-            bmp = page.render(scale=self._scale)
-            img = bmp.to_pil()
-            doc.close()
+            try:
+                bmp = doc[0].render(scale=self._scale)
+                img = bmp.to_pil()
+            finally:
+                doc.close()
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             buf.seek(0)

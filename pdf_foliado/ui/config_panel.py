@@ -121,6 +121,7 @@ class ConfigPanel(QWidget):
         form1.addRow("Iniciar desde:", self._spin_start)
         self._edit_prefix = QLineEdit()
         self._edit_prefix.setPlaceholderText("ej. Folio ")
+        self._edit_prefix.setMaxLength(50)
         form1.addRow("Prefijo:", self._edit_prefix)
         lay.addLayout(form1)
 

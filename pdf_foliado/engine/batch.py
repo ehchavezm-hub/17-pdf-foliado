@@ -2,6 +2,7 @@
 from __future__ import annotations
 import tempfile
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,8 +41,9 @@ class BatchWorker(QThread):
         self._cancelled = False
 
     def provide_password(self, path: str, password: str) -> None:
-        """Called from UI thread when user provides a password."""
+        """Called from UI thread when user provides a password; unblocks the worker."""
         self._passwords[path] = password
+        self._password_event.set()
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -59,9 +61,18 @@ class BatchWorker(QThread):
             pwd = self._passwords.get(str(path))
             result = validate_file(path, password=pwd)
             if not result.ok:
-                self.file_error.emit(str(path), result.error or "Error desconocido")
-            else:
-                valid_files.append(path)
+                # If encrypted and no password yet, ask the UI for one and retry once
+                if pwd is None and result.error and "contrase" in result.error.lower():
+                    self._password_event.clear()
+                    self.password_needed.emit(str(path))
+                    self._password_event.wait(timeout=120)  # block until UI responds
+                    pwd = self._passwords.get(str(path))
+                    if pwd:
+                        result = validate_file(path, password=pwd)
+                if not result.ok:
+                    self.file_error.emit(str(path), result.error or "Error desconocido")
+                    continue
+            valid_files.append(path)
 
         # Phase 1: pre-scan for correlativo (get page counts)
         page_counts: dict[str, int] = {}
@@ -107,7 +118,7 @@ class BatchWorker(QThread):
 
             for page, folio_num in zip(pdf.pages, folios):
                 folio_text = cfg.prefix + str(folio_num).zfill(4)
-                stamp_page(page, folio_text, cfg.stamp, owner=pdf)
+                stamp_page(page, folio_text, cfg.stamp, owning_pdf=pdf)
 
             # Atomic write
             if self._output_dir:

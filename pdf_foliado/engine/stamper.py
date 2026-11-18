@@ -11,7 +11,7 @@ from pdf_foliado.utils.pdf_info import get_page_box, get_page_rotation
 
 MM_TO_PT = 72 / 25.4
 
-# Rotation compensation: visual corner → PDF-space corner after /Rotate
+# Rotation compensation: visual corner -> PDF-space corner after /Rotate
 _CORNER_ROTATE: dict[tuple[str, int], str] = {
     ("TL", 0): "TL",   ("TL", 90): "BL",  ("TL", 180): "BR", ("TL", 270): "TR",
     ("TR", 0): "TR",   ("TR", 90): "TL",  ("TR", 180): "BL", ("TR", 270): "BR",
@@ -38,9 +38,16 @@ class StampParams:
     color_hex: str       # e.g. "#231F20"
 
 
-def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams,
-               owner: pikepdf.Pdf | None = None) -> pikepdf.Page:
-    """Stamp folio_text onto page in-place. Returns the same page object."""
+def stamp_page(
+    page: pikepdf.Page,
+    folio_text: str,
+    params: StampParams,
+    owning_pdf: "pikepdf.Pdf | None" = None,
+) -> pikepdf.Page:
+    """Stamp folio_text onto page in-place. Returns the same page object.
+
+    owning_pdf must be provided when the page may have no /Contents (blank pages).
+    """
     x0, y0, w, h = get_page_box(page)
     rot = get_page_rotation(page)
 
@@ -71,23 +78,24 @@ def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams,
     c.save()
     buf.seek(0)
 
-    # Extract raw overlay content stream bytes
-    overlay_pdf = pikepdf.open(buf)
-    overlay_page = overlay_pdf.pages[0]
-    overlay_content = _get_content_bytes(overlay_page)
-    overlay_pdf.close()
-
-    # Ensure page resources contain the font
-    _ensure_font_resource(page, rl_font)
+    # Extract overlay content and copy font resources while overlay_pdf is open
+    with pikepdf.open(buf) as overlay_pdf:
+        overlay_page = overlay_pdf.pages[0]
+        overlay_content = _get_content_bytes(overlay_page)
+        # Copy fonts under their original keys (preserves /F1, etc.)
+        _copy_overlay_fonts(page, overlay_page)
 
     # Coalesce page content to a single stream, then append overlay
     page.contents_coalesce()
     if "/Contents" not in page:
-        _write_fresh_content(page, overlay_content, owner=owner)
+        if owning_pdf is None:
+            raise ValueError(
+                "stamp_page: page has no /Contents — pass owning_pdf to stamp blank pages"
+            )
+        _write_fresh_content(page, overlay_content, owning_pdf)
     else:
         content_obj = page["/Contents"]
         existing = bytes(content_obj.read_raw_bytes())
-        # Decompress if needed
         try:
             existing = bytes(content_obj.read_bytes())
         except Exception:
@@ -99,7 +107,7 @@ def stamp_page(page: pikepdf.Page, folio_text: str, params: StampParams,
 
 
 def _get_content_bytes(page: pikepdf.Page) -> bytes:
-    """Return raw (possibly compressed) content stream bytes of page."""
+    """Return decompressed content stream bytes of page."""
     if "/Contents" not in page:
         return b""
     cs = page["/Contents"]
@@ -111,39 +119,43 @@ def _get_content_bytes(page: pikepdf.Page) -> bytes:
         return bytes(cs.read_raw_bytes())
 
 
-def _ensure_font_resource(page: pikepdf.Page, font_name: str) -> None:
-    """Add a standard Type1 font resource to page if not present."""
-    if "/Resources" not in page:
-        page["/Resources"] = pikepdf.Dictionary()
-    res = page["/Resources"]
+def _copy_overlay_fonts(target_page: pikepdf.Page, overlay_page: pikepdf.Page) -> None:
+    """Copy font resources from overlay page to target page under original keys.
+
+    This preserves the key (/F1, etc.) that the overlay content stream references,
+    avoiding a mismatch between resource keys and content stream font references.
+    """
+    try:
+        overlay_fonts = overlay_page["/Resources"]["/Font"]
+    except KeyError:
+        return
+
+    if "/Resources" not in target_page:
+        target_page["/Resources"] = pikepdf.Dictionary()
+    res = target_page["/Resources"]
     if "/Font" not in res:
         res["/Font"] = pikepdf.Dictionary()
     font_dict = res["/Font"]
 
-    # Check if any existing font already maps to this base font
-    for key in font_dict.keys():
-        try:
-            existing = font_dict[key]
-            if existing.get("/BaseFont") == pikepdf.Name(f"/{font_name}"):
-                return  # already present
-        except Exception:
-            pass
-
-    # Add a new Type1 font reference
-    # Use a key that won't collide: Fnn where nn is count+1
-    new_key = f"/Fol{len(font_dict) + 1}"
-    font_dict[new_key] = pikepdf.Dictionary(
-        Type=pikepdf.Name("/Font"),
-        Subtype=pikepdf.Name("/Type1"),
-        BaseFont=pikepdf.Name(f"/{font_name}"),
-    )
+    for key in overlay_fonts.keys():
+        if key not in font_dict:
+            src = overlay_fonts[key]
+            # Create a standalone font dict (no dependency on overlay_pdf after close)
+            new_font = pikepdf.Dictionary(
+                Type=pikepdf.Name("/Font"),
+                Subtype=src.get("/Subtype", pikepdf.Name("/Type1")),
+                BaseFont=src["/BaseFont"],
+            )
+            if "/Encoding" in src:
+                new_font["/Encoding"] = src["/Encoding"]
+            font_dict[key] = new_font
 
 
-def _write_fresh_content(page: pikepdf.Page, content: bytes,
-                         owner: pikepdf.Pdf | None = None) -> None:
+def _write_fresh_content(
+    page: pikepdf.Page, content: bytes, owning_pdf: pikepdf.Pdf
+) -> None:
     """Write content to a page that has no /Contents yet."""
-    pdf = owner or pikepdf.Pdf.new()
-    page["/Contents"] = pikepdf.Stream(pdf, b"q\n" + content + b"\nQ\n")
+    page["/Contents"] = pikepdf.Stream(owning_pdf, b"q\n" + content + b"\nQ\n")
 
 
 def _rl_font_name(font_name: str) -> str:

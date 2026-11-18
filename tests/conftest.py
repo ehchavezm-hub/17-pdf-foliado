@@ -39,6 +39,11 @@ def pdf_10p():
 
 
 @pytest.fixture(scope="session")
+def pdf_5p():
+    return _make_pdf("5p.pdf", pages=5)
+
+
+@pytest.fixture(scope="session")
 def pdf_0p():
     TMP.mkdir(exist_ok=True)
     p = TMP / "0p.pdf"

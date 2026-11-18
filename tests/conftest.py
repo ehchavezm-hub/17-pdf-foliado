@@ -48,8 +48,6 @@ def pdf_0p():
     # Use pikepdf to remove it after.
     c.save()
     with pikepdf.open(p, allow_overwriting_input=True) as pdf:
-        pdf.pages.p = []
-        # Remove all pages
         while len(pdf.pages) > 0:
             del pdf.pages[0]
         pdf.save(p)

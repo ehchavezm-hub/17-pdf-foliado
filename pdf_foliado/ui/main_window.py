@@ -133,12 +133,12 @@ class MainWindow(QMainWindow):
         left_w.setLayout(left)
         cols.addWidget(left_w, 2)
 
-        # Right pane — config panel stub (Task 8 fills this in)
-        self._right_pane = QLabel("Panel de configuración\n(próximamente)")
-        self._right_pane.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._right_pane.setStyleSheet(
-            "border: 1px dashed #BDBDBD; border-radius: 4px; color: #757575;")
-        cols.addWidget(self._right_pane, 3)
+        # Right pane — real config panel
+        from pdf_foliado.ui.config_panel import ConfigPanel
+        self._config_panel = ConfigPanel()
+        self._config_panel.set_preferences(self._prefs)
+        self._config_panel.config_changed.connect(self._on_config_changed)
+        cols.addWidget(self._config_panel, 3)
 
         root.addLayout(cols, 1)
 
@@ -170,6 +170,10 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     @Slot()
+    def _on_config_changed(self):
+        self._prefs = self._config_panel.get_preferences()
+
+    @Slot()
     def _on_add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Seleccionar PDFs", "", "PDF (*.pdf)")
@@ -190,25 +194,8 @@ class MainWindow(QMainWindow):
             self._worker.cancel()
 
     def _run_batch(self, files: list[Path]) -> None:
-        from pdf_foliado.engine.batch import BatchWorker, BatchConfig
-        from pdf_foliado.engine.stamper import StampParams
-        p = self._prefs
-        cfg = BatchConfig(
-            files=files,
-            mode=p.mode,
-            order=p.order,
-            start=p.start,
-            prefix=p.prefix,
-            suffix_file=p.suffix_file,
-            stamp=StampParams(
-                corner=p.corner,
-                d1_mm=p.d1_mm,
-                d2_mm=p.d2_mm,
-                font_name=p.font_name,
-                font_size_pt=p.font_size_pt,
-                color_hex=p.color_hex,
-            ),
-        )
+        from pdf_foliado.engine.batch import BatchWorker
+        cfg = self._config_panel.get_config(files)
         self._worker = BatchWorker(cfg)
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
@@ -243,4 +230,4 @@ class MainWindow(QMainWindow):
         self._worker = None
 
     def get_preferences(self) -> Preferences:
-        return self._prefs
+        return self._config_panel.get_preferences()

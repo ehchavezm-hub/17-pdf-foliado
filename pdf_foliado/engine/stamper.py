@@ -161,3 +161,24 @@ def _write_fresh_content(
 def _rl_font_name(font_name: str) -> str:
     """Map UI font name to a reportlab/PDF standard font name."""
     return "Helvetica"  # all 13 UI fonts fall back to Helvetica for stamping
+
+
+def folio_overflow_warning(
+    page: pikepdf.Page,
+    folio_text: str,
+    params: StampParams,
+) -> str | None:
+    """Return a warning string if folio text would overflow the CropBox width, else None."""
+    _x0, _y0, w, _h = get_page_box(page)
+    rl_font = _rl_font_name(params.font_name)
+    # Approximate text width using reportlab metrics
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    text_width = stringWidth(folio_text, rl_font, params.font_size_pt)
+    d2 = params.d2_mm * MM_TO_PT
+    if d2 + text_width > w:
+        return (
+            f"El texto '{folio_text}' ({text_width:.0f} pt) "
+            f"excede el ancho disponible ({w - d2:.0f} pt). "
+            "El folio puede quedar fuera de la página."
+        )
+    return None

@@ -1,3 +1,4 @@
+import re
 import pytest
 import pikepdf
 from pathlib import Path
@@ -64,16 +65,42 @@ def test_prefix_in_folio(pdf_1p, tmp_path):
     with pikepdf.open(pdf_1p) as pdf:
         stamp_page(pdf.pages[0], "Folio 0001", _default_params())
         pdf.save(out)
-    # just verify it saves without error
     assert out.exists()
 
 
-def test_font_resource_key_matches_content_stream(pdf_1p, tmp_path):
-    """Font resource keys must match what the overlay content stream references."""
-    import re
-    out = tmp_path / "stamped.pdf"
-    with pikepdf.open(pdf_1p) as pdf:
-        stamp_page(pdf.pages[0], "0001", _default_params(), owner=pdf)
+def _make_pikepdf_only_pdf(path: Path, with_contents: bool = True) -> None:
+    """Create a minimal PDF using only pikepdf (no reportlab) so /F1 is not pre-existing."""
+    pdf = pikepdf.Pdf.new()
+    if with_contents:
+        contents = pdf.make_indirect(pikepdf.Stream(pdf, b""))
+        page_dict = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name("/Page"),
+            MediaBox=[0, 0, 595, 842],
+            Contents=contents,
+        ))
+    else:
+        page_dict = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name("/Page"),
+            MediaBox=[0, 0, 595, 842],
+        ))
+    pdf.pages.append(pikepdf.Page(page_dict))
+    pdf.save(path)
+    pdf.close()
+
+
+def test_font_resource_key_matches_content_stream(tmp_path):
+    """Font resource keys must match what the overlay content stream references.
+
+    For a pikepdf-only PDF (no reportlab pre-existing /F1), after stamping the
+    font resource key added to the page must be /F1 (the key the overlay uses),
+    not a different key like /Fol1.
+    """
+    p = tmp_path / "pikepdf_only.pdf"
+    _make_pikepdf_only_pdf(p, with_contents=True)
+
+    out = tmp_path / "pikepdf_only_stamped.pdf"
+    with pikepdf.open(p) as pdf:
+        stamp_page(pdf.pages[0], "0001", _default_params(), owning_pdf=pdf)
         pdf.save(out)
 
     with pikepdf.open(out) as pdf:
@@ -83,23 +110,20 @@ def test_font_resource_key_matches_content_stream(pdf_1p, tmp_path):
         font_keys = set(str(k) for k in page["/Resources"]["/Font"].keys())
         for ref in font_refs:
             assert ref in font_keys, (
-                f"Font {ref} referenced in content stream but missing from /Resources/Font"
+                f"Font {ref} referenced in content stream but not in /Resources/Font. "
+                f"Available keys: {font_keys}"
             )
 
 
-def test_blank_page_no_contents_stamps_successfully(pdf_1p, tmp_path):
-    """Stamping a page with no /Contents must not crash on save."""
-    # Strip /Contents from an existing page to simulate a blank page
+def test_blank_page_no_contents_stamps_successfully(tmp_path):
+    """Stamping a page with no /Contents must not crash on pdf.save()."""
     p = tmp_path / "blank.pdf"
-    with pikepdf.open(pdf_1p) as pdf_src:
-        with pikepdf.open(pdf_1p) as pdf_blank:
-            if "/Contents" in pdf_blank.pages[0]:
-                del pdf_blank.pages[0]["/Contents"]
-            pdf_blank.save(p)
+    _make_pikepdf_only_pdf(p, with_contents=False)
 
     out = tmp_path / "blank_stamped.pdf"
     with pikepdf.open(p) as pdf:
-        stamp_page(pdf.pages[0], "0001", _default_params(), owner=pdf)
+        assert "/Contents" not in pdf.pages[0], "fixture must have no /Contents"
+        stamp_page(pdf.pages[0], "0001", _default_params(), owning_pdf=pdf)
         pdf.save(out)
 
     assert out.exists()

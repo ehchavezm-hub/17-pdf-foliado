@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QProgressBar, QLabel, QFileDialog,
-    QSizePolicy, QApplication,
+    QSizePolicy, QApplication, QInputDialog, QLineEdit,
 )
 
 from pdf_foliado.ui.file_list import FileListWidget
@@ -160,6 +160,8 @@ class MainWindow(QMainWindow):
         self._worker.file_done.connect(self._on_file_done)
         self._worker.file_error.connect(self._on_file_error)
         self._worker.finished.connect(self._on_finished)
+        self._worker.password_needed.connect(self._on_password_needed)
+        self._worker.file_warning.connect(self._on_file_warning)
         self._progress.setValue(0)
         self._progress.setRange(0, len(files))
         self._progress.setVisible(True)
@@ -191,6 +193,22 @@ class MainWindow(QMainWindow):
         self._btn_foliar.setEnabled(True)
         self._status_label.setText("Completado.")
         self._worker = None
+
+    @Slot(str, str)
+    def _on_file_warning(self, src_path: str, msg: str) -> None:
+        self._status_label.setText(f"⚠ {msg}")
+
+    @Slot(str)
+    def _on_password_needed(self, path: str) -> None:
+        name = Path(path).name
+        pwd, ok = QInputDialog.getText(
+            self,
+            "Contraseña requerida",
+            f"El archivo '{name}' está protegido.\nIngrese la contraseña:",
+            QLineEdit.EchoMode.Password,
+        )
+        if self._worker:
+            self._worker.provide_password(path, pwd if ok else "")
 
     def get_preferences(self) -> Preferences:
         return self._config_panel.get_preferences()

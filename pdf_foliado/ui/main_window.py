@@ -62,13 +62,12 @@ class _CollapsibleCard(QWidget):
         self._chk.toggled.connect(self._on_toggled)
 
     def _update_hdr_style(self, expanded: bool) -> None:
-        from PySide6.QtGui import QPalette, QColor
-        pal = self._hdr.palette()
-        pal.setColor(QPalette.ColorRole.Window, QColor("#424242"))
-        self._hdr.setPalette(pal)
-        self._hdr.setAutoFillBackground(True)
         r = "5px 5px 0 0" if expanded else "5px"
-        self._hdr.setStyleSheet(f"QWidget {{ border-radius: {r}; }}")
+        # Use ID selector so this rule beats the global QWidget rule in build_stylesheet.
+        # Widget-own stylesheet overrides app stylesheet; #id beats type selector.
+        self._hdr.setStyleSheet(
+            f"QWidget#cardHdr {{ background-color: #424242; border-radius: {r}; }}"
+        )
 
     def _on_toggled(self, checked: bool) -> None:
         self._body.setVisible(checked)
@@ -220,7 +219,7 @@ class MainWindow(QMainWindow):
             lambda: self._sello_card.set_checked(True))
 
         right_w = QWidget()
-        right_w.setMaximumWidth(380)
+        right_w.setMaximumWidth(440)
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
         right_vlay.setSpacing(0)
@@ -239,7 +238,7 @@ class MainWindow(QMainWindow):
         right_vlay.addWidget(outer_scroll, 1)
 
         splitter.addWidget(right_w)
-        splitter.setSizes([1000, 380])
+        splitter.setSizes([1000, 440])
 
         root.addWidget(splitter, 1)
 

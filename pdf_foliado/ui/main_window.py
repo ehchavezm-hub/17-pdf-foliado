@@ -186,9 +186,8 @@ class MainWindow(QMainWindow):
         left.addWidget(btn_remove)
 
         self._preview = PreviewWidget()
-        self._preview.setMinimumHeight(180)
-        self._preview.setMaximumHeight(240)
-        left.addWidget(self._preview)
+        self._preview.setMinimumHeight(360)
+        left.addWidget(self._preview, 1)
 
         left_w = QWidget()
         left_w.setLayout(left)

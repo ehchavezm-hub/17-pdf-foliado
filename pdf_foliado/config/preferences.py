@@ -21,6 +21,15 @@ class Preferences:
     color_hex: str = "#231F20"
     suffix_file: str = "_fol"
     skin: str = "rojo"                # "rojo" | "azul" | "bosque"
+    # Image stamp
+    image_stamp_path: str = ""
+    image_stamp_corner: str = "BR"
+    image_stamp_d1_mm: float = 10.0
+    image_stamp_d2_mm: float = 15.0
+    image_stamp_angle_deg: float = 0.0
+    image_stamp_width_mm: float = 30.0
+    image_stamp_pages: str = "todas"  # "primera" | "todas"
+    image_stamp_enabled: bool = False
 
 
 def save(prefs: Preferences, base_dir: Path) -> None:

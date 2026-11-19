@@ -8,7 +8,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QProgressBar, QLabel, QFileDialog,
-    QSizePolicy, QApplication, QInputDialog, QLineEdit,
+    QSizePolicy, QApplication, QInputDialog, QLineEdit, QTabWidget,
 )
 
 from pdf_foliado.ui.file_list import FileListWidget
@@ -127,13 +127,22 @@ class MainWindow(QMainWindow):
         left_w.setLayout(left)
         cols.addWidget(left_w, 2)
 
-        # Right pane — real config panel
+        # Right pane — tabs: Folio + Sello
         from pdf_foliado.ui.config_panel import ConfigPanel
+        from pdf_foliado.ui.sello_panel import SelloPanel
         self._config_panel = ConfigPanel()
         self._config_panel.set_preferences(self._prefs)
         self._config_panel.config_changed.connect(self._on_config_changed)
         self._config_panel.skin_changed.connect(self._apply_skin)
-        cols.addWidget(self._config_panel, 3)
+
+        self._sello_panel = SelloPanel()
+        self._sello_panel.set_image_params(self._prefs_to_image_params(self._prefs))
+        self._sello_panel.config_changed.connect(self._on_config_changed)
+
+        self._right_tabs = QTabWidget()
+        self._right_tabs.addTab(self._config_panel, "Folio")
+        self._right_tabs.addTab(self._sello_panel, "Sello")
+        cols.addWidget(self._right_tabs, 3)
 
         root.addLayout(cols, 1)
 
@@ -224,9 +233,29 @@ class MainWindow(QMainWindow):
         if self._worker:
             self._worker.cancel()
 
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _prefs_to_image_params(prefs):
+        from pdf_foliado.engine.image_stamper import ImageStampParams
+        return ImageStampParams(
+            image_path=prefs.image_stamp_path,
+            corner=prefs.image_stamp_corner,
+            d1_mm=prefs.image_stamp_d1_mm,
+            d2_mm=prefs.image_stamp_d2_mm,
+            angle_deg=prefs.image_stamp_angle_deg,
+            width_mm=prefs.image_stamp_width_mm,
+            pages=prefs.image_stamp_pages,
+            enabled=prefs.image_stamp_enabled,
+        )
+
+    def _get_full_config(self, files):
+        cfg = self._config_panel.get_config(files)
+        cfg.image_stamp = self._sello_panel.get_image_params()
+        return cfg
+
     def _run_batch(self, files: list[Path]) -> None:
         from pdf_foliado.engine.batch import BatchWorker
-        cfg = self._config_panel.get_config(files)
+        cfg = self._get_full_config(files)
         self._worker = BatchWorker(cfg)
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
@@ -293,4 +322,14 @@ class MainWindow(QMainWindow):
             self._worker.provide_password(path, pwd if ok else "")
 
     def get_preferences(self) -> Preferences:
-        return self._config_panel.get_preferences()
+        prefs = self._config_panel.get_preferences()
+        ip = self._sello_panel.get_image_params()
+        prefs.image_stamp_path = ip.image_path
+        prefs.image_stamp_corner = ip.corner
+        prefs.image_stamp_d1_mm = ip.d1_mm
+        prefs.image_stamp_d2_mm = ip.d2_mm
+        prefs.image_stamp_angle_deg = ip.angle_deg
+        prefs.image_stamp_width_mm = ip.width_mm
+        prefs.image_stamp_pages = ip.pages
+        prefs.image_stamp_enabled = ip.enabled
+        return prefs

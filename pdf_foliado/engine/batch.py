@@ -10,6 +10,7 @@ import pikepdf
 from PySide6.QtCore import QThread, Signal
 
 from pdf_foliado.engine.stamper import StampParams, stamp_page, folio_overflow_warning
+from pdf_foliado.engine.image_stamper import ImageStampParams, stamp_image_page
 from pdf_foliado.engine.validator import validate_file
 from pdf_foliado.utils.pdf_info import get_pdf_info
 from pdf_foliado.utils.path_utils import safe_output_path
@@ -24,6 +25,7 @@ class BatchConfig:
     prefix: str
     suffix_file: str
     stamp: StampParams
+    image_stamp: ImageStampParams | None = None
 
 
 class BatchWorker(QThread):
@@ -119,7 +121,7 @@ class BatchWorker(QThread):
                 folios = range(start_folio + n_pages - 1, start_folio - 1, -1)
 
             warned = False
-            for page, folio_num in zip(pdf.pages, folios):
+            for page_idx, (page, folio_num) in enumerate(zip(pdf.pages, folios)):
                 folio_text = cfg.prefix + str(folio_num).zfill(4)
                 if not warned:
                     warn = folio_overflow_warning(page, folio_text, cfg.stamp)
@@ -127,6 +129,8 @@ class BatchWorker(QThread):
                         self.file_warning.emit(str(path), warn)
                         warned = True
                 stamp_page(page, folio_text, cfg.stamp, owning_pdf=pdf)
+                if cfg.image_stamp:
+                    stamp_image_page(page, cfg.image_stamp, page_index=page_idx)
 
             # Atomic write
             if self._output_dir:

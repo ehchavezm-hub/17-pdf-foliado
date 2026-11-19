@@ -1,0 +1,47 @@
+╔══════════════════════════════════════════════════════════════╗
+║                     PDF Foliado                             ║
+║           Instrucciones para ejecutar con Python            ║
+╚══════════════════════════════════════════════════════════════╝
+
+REQUISITO
+─────────
+  Python 3.13 o superior
+  Descargar: https://www.python.org/downloads/
+
+
+PASOS
+─────
+
+  1. Instalar dependencias (solo la primera vez):
+
+       pip install -r requirements.txt
+
+
+  2. Ejecutar la aplicación:
+
+       py pdf_foliado/main.py
+
+
+ESTRUCTURA DE CARPETAS
+──────────────────────
+
+  pdf_foliado/   →  Código fuente de la aplicación
+  build/         →  Scripts para generar el ejecutable (.exe)
+  docs/          →  Documentación interna
+  tests/         →  Pruebas automáticas
+
+
+GENERAR EL EJECUTABLE (.exe)
+─────────────────────────────
+  Si quieres crear un .exe standalone para distribuir sin Python:
+
+    1. Ir a la carpeta build\
+    2. Ejecutar build.bat
+
+  El ejecutable quedará en build\dist\pdf-foliado\
+
+
+DESCARGA DIRECTA DEL .EXE
+──────────────────────────
+  Disponible en GitHub Releases — sin necesidad de Python:
+  https://github.com/ehchavezm-hub/17-pdf-foliado/releases

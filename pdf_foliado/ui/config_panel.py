@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QButtonGroup, QSpinBox, QDoubleSpinBox,
-    QLineEdit, QComboBox, QScrollArea, QFrame,
+    QLineEdit, QComboBox,
 )
 
 from pdf_foliado.config.preferences import Preferences
@@ -37,18 +37,9 @@ class ConfigPanel(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        inner = QWidget()
-        lay = QVBoxLayout(inner)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 8)
         lay.setSpacing(14)
-        scroll.setWidget(inner)
-        outer.addWidget(scroll)
 
         # --- Modo ---
         lay.addWidget(self._section("Modo de foliado"))

@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QButtonGroup, QDoubleSpinBox,
-    QComboBox, QScrollArea, QFrame, QFileDialog,
+    QComboBox, QFileDialog,
 )
 
 from pdf_foliado.engine.image_stamper import ImageStampParams
@@ -32,18 +32,9 @@ class SelloPanel(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        inner = QWidget()
-        lay = QVBoxLayout(inner)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 8)
         lay.setSpacing(14)
-        scroll.setWidget(inner)
-        outer.addWidget(scroll)
 
         # --- Imagen ---
         lay.addWidget(self._section("Archivo de imagen"))
@@ -137,8 +128,6 @@ class SelloPanel(QWidget):
         pages_row.addWidget(self._btn_todas)
         pages_row.addStretch()
         lay.addLayout(pages_row)
-
-        lay.addStretch()
 
         # --- Señales ---
         self._corner_group.buttonClicked.connect(lambda _: self.config_changed.emit())

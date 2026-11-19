@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QProgressBar, QLabel, QFileDialog,
     QSizePolicy, QApplication, QInputDialog, QLineEdit,
+    QCheckBox, QScrollArea, QFrame,
 )
 
 from pdf_foliado.ui.file_list import FileListWidget
@@ -124,7 +125,7 @@ class MainWindow(QMainWindow):
         left_w.setLayout(left)
         cols.addWidget(left_w, 2)
 
-        # Right pane — toggle header + stacked panels
+        # Right pane — checkbox selection + single scroll with section headers
         from pdf_foliado.ui.config_panel import ConfigPanel
         from pdf_foliado.ui.sello_panel import SelloPanel
         self._config_panel = ConfigPanel()
@@ -135,40 +136,70 @@ class MainWindow(QMainWindow):
         self._sello_panel.set_image_params(self._prefs_to_image_params(self._prefs))
         self._sello_panel.config_changed.connect(self._on_config_changed)
         self._sello_panel.image_selected.connect(
-            lambda: self._btn_sello_toggle.setChecked(True))
+            lambda: self._chk_sello.setChecked(True))
 
-        # Toggle buttons row
         right_w = QWidget()
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
-        right_vlay.setSpacing(4)
+        right_vlay.setSpacing(0)
 
-        toggle_row = QHBoxLayout()
-        toggle_row.setSpacing(6)
-        toggle_row.setContentsMargins(4, 4, 4, 0)
-        self._btn_folio_toggle = QPushButton("Folio")
-        self._btn_folio_toggle.setObjectName("secondary")
-        self._btn_folio_toggle.setCheckable(True)
-        self._btn_folio_toggle.setChecked(self._prefs.folio_enabled)
-        self._btn_folio_toggle.setMinimumWidth(90)
-        self._btn_sello_toggle = QPushButton("Sello")
-        self._btn_sello_toggle.setObjectName("secondary")
-        self._btn_sello_toggle.setCheckable(True)
-        self._btn_sello_toggle.setChecked(self._prefs.image_stamp_enabled)
-        self._btn_sello_toggle.setMinimumWidth(90)
-        toggle_row.addWidget(self._btn_folio_toggle)
-        toggle_row.addWidget(self._btn_sello_toggle)
-        toggle_row.addStretch()
-        right_vlay.addLayout(toggle_row)
+        # ── Checkbox selection row (always visible, never scrolls) ──
+        sel_row = QHBoxLayout()
+        sel_row.setContentsMargins(10, 8, 10, 6)
+        sel_row.setSpacing(20)
+        self._chk_folio = QCheckBox("Folio")
+        self._chk_folio.setChecked(self._prefs.folio_enabled)
+        self._chk_sello = QCheckBox("Sello")
+        self._chk_sello.setChecked(self._prefs.image_stamp_enabled)
+        font_sel = self._chk_folio.font()
+        font_sel.setPointSize(11)
+        font_sel.setBold(True)
+        self._chk_folio.setFont(font_sel)
+        self._chk_sello.setFont(font_sel)
+        sel_row.addWidget(self._chk_folio)
+        sel_row.addWidget(self._chk_sello)
+        sel_row.addStretch()
+        right_vlay.addLayout(sel_row)
 
-        # Panels container (stacked vertically)
-        self._config_panel.setVisible(self._prefs.folio_enabled)
-        self._sello_panel.setVisible(self._prefs.image_stamp_enabled)
-        right_vlay.addWidget(self._config_panel, 1)
-        right_vlay.addWidget(self._sello_panel, 1)
+        # ── Thin separator line ──
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #E0E0E0;")
+        right_vlay.addWidget(sep)
 
-        self._btn_folio_toggle.toggled.connect(self._on_folio_toggle)
-        self._btn_sello_toggle.toggled.connect(self._on_sello_toggle)
+        # ── Single outer scroll — all panel content in one flow ──
+        outer_scroll = QScrollArea()
+        outer_scroll.setWidgetResizable(True)
+        outer_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_inner = QWidget()
+        scroll_lay = QVBoxLayout(scroll_inner)
+        scroll_lay.setContentsMargins(10, 8, 10, 8)
+        scroll_lay.setSpacing(0)
+
+        # Folio section header + content
+        self._folio_header = self._section_header("FOLIO")
+        scroll_lay.addWidget(self._folio_header)
+        scroll_lay.addWidget(self._config_panel)
+
+        # Sello section header + content
+        self._sello_header = self._section_header("SELLO")
+        scroll_lay.addWidget(self._sello_header)
+        scroll_lay.addWidget(self._sello_panel)
+
+        scroll_lay.addStretch()
+        outer_scroll.setWidget(scroll_inner)
+        right_vlay.addWidget(outer_scroll, 1)
+
+        # Initial visibility
+        folio_on = self._prefs.folio_enabled
+        sello_on = self._prefs.image_stamp_enabled
+        self._folio_header.setVisible(folio_on)
+        self._config_panel.setVisible(folio_on)
+        self._sello_header.setVisible(sello_on)
+        self._sello_panel.setVisible(sello_on)
+
+        self._chk_folio.toggled.connect(self._on_folio_toggle)
+        self._chk_sello.toggled.connect(self._on_sello_toggle)
 
         cols.addWidget(right_w, 3)
 
@@ -208,13 +239,25 @@ class MainWindow(QMainWindow):
         root.addLayout(bottom)
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _section_header(title: str) -> QLabel:
+        lbl = QLabel(title)
+        lbl.setStyleSheet(
+            "font-size: 11px; font-weight: 700; letter-spacing: 1px;"
+            "color: white; background: #616161;"
+            "padding: 4px 8px; border-radius: 2px; margin-bottom: 4px;"
+        )
+        return lbl
+
     @Slot()
     def _on_folio_toggle(self, checked: bool) -> None:
+        self._folio_header.setVisible(checked)
         self._config_panel.setVisible(checked)
         self._refresh_preview()
 
     @Slot()
     def _on_sello_toggle(self, checked: bool) -> None:
+        self._sello_header.setVisible(checked)
         self._sello_panel.setVisible(checked)
         self._refresh_preview()
 
@@ -232,13 +275,13 @@ class MainWindow(QMainWindow):
         path = Path(item.data(0x0100))
         prefs = self._config_panel.get_preferences()
         self._preview.load_pdf(path)
-        if self._btn_folio_toggle.isChecked():
+        if self._chk_folio.isChecked():
             folio_text = f"{prefs.prefix}{prefs.start:04d}"
             self._preview.update_folio(folio_text, self._config_panel.get_config([path]).stamp)
         else:
             self._preview.update_folio("", None)
         image_params = self._sello_panel.get_image_params()
-        image_params.enabled = self._btn_sello_toggle.isChecked()
+        image_params.enabled = self._chk_sello.isChecked()
         self._preview.update_image_stamp(image_params)
 
     @Slot()
@@ -296,9 +339,9 @@ class MainWindow(QMainWindow):
 
     def _get_full_config(self, files):
         cfg = self._config_panel.get_config(files)
-        cfg.folio_enabled = self._btn_folio_toggle.isChecked()
+        cfg.folio_enabled = self._chk_folio.isChecked()
         image_params = self._sello_panel.get_image_params()
-        image_params.enabled = self._btn_sello_toggle.isChecked()
+        image_params.enabled = self._chk_sello.isChecked()
         cfg.image_stamp = image_params
         return cfg
 
@@ -373,7 +416,7 @@ class MainWindow(QMainWindow):
     def get_preferences(self) -> Preferences:
         prefs = self._config_panel.get_preferences()
         prefs.skin = self._prefs.skin
-        prefs.folio_enabled = self._btn_folio_toggle.isChecked()
+        prefs.folio_enabled = self._chk_folio.isChecked()
         ip = self._sello_panel.get_image_params()
         prefs.image_stamp_path = ip.image_path
         prefs.image_stamp_corner = ip.corner
@@ -382,5 +425,5 @@ class MainWindow(QMainWindow):
         prefs.image_stamp_angle_deg = ip.angle_deg
         prefs.image_stamp_width_mm = ip.width_mm
         prefs.image_stamp_pages = ip.pages
-        prefs.image_stamp_enabled = self._btn_sello_toggle.isChecked()
+        prefs.image_stamp_enabled = self._chk_sello.isChecked()
         return prefs

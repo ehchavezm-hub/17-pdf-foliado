@@ -8,7 +8,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QProgressBar, QLabel, QFileDialog,
-    QSizePolicy, QApplication, QInputDialog, QLineEdit, QTabWidget,
+    QSizePolicy, QApplication, QInputDialog, QLineEdit,
 )
 
 from pdf_foliado.ui.file_list import FileListWidget
@@ -34,12 +34,9 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     def _apply_skin(self, skin: str) -> None:
-        """Apply stylesheet and keep config panel in sync."""
+        """Apply stylesheet and store current skin."""
         self._prefs.skin = skin
         QApplication.instance().setStyleSheet(build_stylesheet(skin))
-        # Sync config panel skin state so get_preferences() returns the right value
-        if hasattr(self, "_config_panel"):
-            self._config_panel.sync_skin(skin)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -127,22 +124,53 @@ class MainWindow(QMainWindow):
         left_w.setLayout(left)
         cols.addWidget(left_w, 2)
 
-        # Right pane — tabs: Folio + Sello
+        # Right pane — toggle header + stacked panels
         from pdf_foliado.ui.config_panel import ConfigPanel
         from pdf_foliado.ui.sello_panel import SelloPanel
         self._config_panel = ConfigPanel()
         self._config_panel.set_preferences(self._prefs)
         self._config_panel.config_changed.connect(self._on_config_changed)
-        self._config_panel.skin_changed.connect(self._apply_skin)
 
         self._sello_panel = SelloPanel()
         self._sello_panel.set_image_params(self._prefs_to_image_params(self._prefs))
         self._sello_panel.config_changed.connect(self._on_config_changed)
+        self._sello_panel.image_selected.connect(
+            lambda: self._btn_sello_toggle.setChecked(True))
 
-        self._right_tabs = QTabWidget()
-        self._right_tabs.addTab(self._config_panel, "Folio")
-        self._right_tabs.addTab(self._sello_panel, "Sello")
-        cols.addWidget(self._right_tabs, 3)
+        # Toggle buttons row
+        right_w = QWidget()
+        right_vlay = QVBoxLayout(right_w)
+        right_vlay.setContentsMargins(0, 0, 0, 0)
+        right_vlay.setSpacing(4)
+
+        toggle_row = QHBoxLayout()
+        toggle_row.setSpacing(6)
+        toggle_row.setContentsMargins(4, 4, 4, 0)
+        self._btn_folio_toggle = QPushButton("Folio")
+        self._btn_folio_toggle.setObjectName("secondary")
+        self._btn_folio_toggle.setCheckable(True)
+        self._btn_folio_toggle.setChecked(self._prefs.folio_enabled)
+        self._btn_folio_toggle.setMinimumWidth(90)
+        self._btn_sello_toggle = QPushButton("Sello")
+        self._btn_sello_toggle.setObjectName("secondary")
+        self._btn_sello_toggle.setCheckable(True)
+        self._btn_sello_toggle.setChecked(self._prefs.image_stamp_enabled)
+        self._btn_sello_toggle.setMinimumWidth(90)
+        toggle_row.addWidget(self._btn_folio_toggle)
+        toggle_row.addWidget(self._btn_sello_toggle)
+        toggle_row.addStretch()
+        right_vlay.addLayout(toggle_row)
+
+        # Panels container (stacked vertically)
+        self._config_panel.setVisible(self._prefs.folio_enabled)
+        self._sello_panel.setVisible(self._prefs.image_stamp_enabled)
+        right_vlay.addWidget(self._config_panel, 1)
+        right_vlay.addWidget(self._sello_panel, 1)
+
+        self._btn_folio_toggle.toggled.connect(self._on_folio_toggle)
+        self._btn_sello_toggle.toggled.connect(self._on_sello_toggle)
+
+        cols.addWidget(right_w, 3)
 
         root.addLayout(cols, 1)
 
@@ -181,8 +209,20 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     @Slot()
+    def _on_folio_toggle(self, checked: bool) -> None:
+        self._config_panel.setVisible(checked)
+        self._refresh_preview()
+
+    @Slot()
+    def _on_sello_toggle(self, checked: bool) -> None:
+        self._sello_panel.setVisible(checked)
+        self._refresh_preview()
+
+    @Slot()
     def _on_config_changed(self):
+        old_skin = self._prefs.skin
         self._prefs = self._config_panel.get_preferences()
+        self._prefs.skin = old_skin
         self._refresh_preview()
 
     def _refresh_preview(self) -> None:
@@ -191,10 +231,15 @@ class MainWindow(QMainWindow):
             return
         path = Path(item.data(0x0100))
         prefs = self._config_panel.get_preferences()
-        folio_text = f"{prefs.prefix}{prefs.start:04d}"
         self._preview.load_pdf(path)
-        self._preview.update_folio(folio_text, self._config_panel.get_config([path]).stamp)
-        self._preview.update_image_stamp(self._sello_panel.get_image_params())
+        if self._btn_folio_toggle.isChecked():
+            folio_text = f"{prefs.prefix}{prefs.start:04d}"
+            self._preview.update_folio(folio_text, self._config_panel.get_config([path]).stamp)
+        else:
+            self._preview.update_folio("", None)
+        image_params = self._sello_panel.get_image_params()
+        image_params.enabled = self._btn_sello_toggle.isChecked()
+        self._preview.update_image_stamp(image_params)
 
     @Slot()
     def _on_file_selected(self, current, previous) -> None:
@@ -251,7 +296,10 @@ class MainWindow(QMainWindow):
 
     def _get_full_config(self, files):
         cfg = self._config_panel.get_config(files)
-        cfg.image_stamp = self._sello_panel.get_image_params()
+        cfg.folio_enabled = self._btn_folio_toggle.isChecked()
+        image_params = self._sello_panel.get_image_params()
+        image_params.enabled = self._btn_sello_toggle.isChecked()
+        cfg.image_stamp = image_params
         return cfg
 
     def _run_batch(self, files: list[Path]) -> None:
@@ -324,6 +372,8 @@ class MainWindow(QMainWindow):
 
     def get_preferences(self) -> Preferences:
         prefs = self._config_panel.get_preferences()
+        prefs.skin = self._prefs.skin
+        prefs.folio_enabled = self._btn_folio_toggle.isChecked()
         ip = self._sello_panel.get_image_params()
         prefs.image_stamp_path = ip.image_path
         prefs.image_stamp_corner = ip.corner
@@ -332,5 +382,5 @@ class MainWindow(QMainWindow):
         prefs.image_stamp_angle_deg = ip.angle_deg
         prefs.image_stamp_width_mm = ip.width_mm
         prefs.image_stamp_pages = ip.pages
-        prefs.image_stamp_enabled = ip.enabled
+        prefs.image_stamp_enabled = self._btn_sello_toggle.isChecked()
         return prefs

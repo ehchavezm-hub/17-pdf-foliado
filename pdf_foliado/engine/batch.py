@@ -26,6 +26,7 @@ class BatchConfig:
     suffix_file: str
     stamp: StampParams
     image_stamp: ImageStampParams | None = None
+    folio_enabled: bool = True
 
 
 class BatchWorker(QThread):
@@ -123,12 +124,13 @@ class BatchWorker(QThread):
             warned = False
             for page_idx, (page, folio_num) in enumerate(zip(pdf.pages, folios)):
                 folio_text = cfg.prefix + str(folio_num).zfill(4)
-                if not warned:
-                    warn = folio_overflow_warning(page, folio_text, cfg.stamp)
-                    if warn:
-                        self.file_warning.emit(str(path), warn)
-                        warned = True
-                stamp_page(page, folio_text, cfg.stamp, owning_pdf=pdf)
+                if cfg.folio_enabled:
+                    if not warned:
+                        warn = folio_overflow_warning(page, folio_text, cfg.stamp)
+                        if warn:
+                            self.file_warning.emit(str(path), warn)
+                            warned = True
+                    stamp_page(page, folio_text, cfg.stamp, owning_pdf=pdf)
                 if cfg.image_stamp:
                     stamp_image_page(page, cfg.image_stamp, page_index=page_idx)
 

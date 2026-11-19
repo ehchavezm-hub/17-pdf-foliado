@@ -30,6 +30,7 @@ class Preferences:
     image_stamp_width_mm: float = 30.0
     image_stamp_pages: str = "todas"  # "primera" | "todas"
     image_stamp_enabled: bool = False
+    folio_enabled: bool = True
 
 
 def save(prefs: Preferences, base_dir: Path) -> None:

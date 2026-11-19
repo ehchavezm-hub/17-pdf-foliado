@@ -68,8 +68,8 @@ class PreviewWidget(QLabel):
             self.setText(f"Error al cargar: {exc}")
             self._base_pixmap = None
 
-    def update_folio(self, folio_text: str, params: StampParams) -> None:
-        """Update folio overlay and repaint."""
+    def update_folio(self, folio_text: str, params: StampParams | None) -> None:
+        """Update folio overlay and repaint. Pass params=None to clear."""
         self._folio_text = folio_text
         self._stamp_params = params
         self._repaint()

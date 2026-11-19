@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QButtonGroup, QDoubleSpinBox,
-    QCheckBox, QComboBox, QScrollArea, QFrame, QFileDialog,
+    QComboBox, QScrollArea, QFrame, QFileDialog,
 )
 
 from pdf_foliado.engine.image_stamper import ImageStampParams
@@ -23,6 +23,7 @@ class _ToggleButton(QPushButton):
 
 class SelloPanel(QWidget):
     config_changed = Signal()
+    image_selected = Signal()   # emitted when user picks an image file
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,11 +44,6 @@ class SelloPanel(QWidget):
         lay.setSpacing(14)
         scroll.setWidget(inner)
         outer.addWidget(scroll)
-
-        # --- Habilitar ---
-        self._chk_enable = QCheckBox("Habilitar sello de imagen")
-        self._chk_enable.setChecked(False)
-        lay.addWidget(self._chk_enable)
 
         # --- Imagen ---
         lay.addWidget(self._section("Archivo de imagen"))
@@ -145,7 +141,6 @@ class SelloPanel(QWidget):
         lay.addStretch()
 
         # --- Señales ---
-        self._chk_enable.toggled.connect(lambda _: self.config_changed.emit())
         self._corner_group.buttonClicked.connect(lambda _: self.config_changed.emit())
         self._spin_d1.valueChanged.connect(lambda _: self.config_changed.emit())
         self._spin_d2.valueChanged.connect(lambda _: self.config_changed.emit())
@@ -172,7 +167,7 @@ class SelloPanel(QWidget):
         if path:
             self._image_path = path
             self._lbl_file.setText(Path(path).name)
-            self._chk_enable.setChecked(True)
+            self.image_selected.emit()
             self.config_changed.emit()
 
     # ------------------------------------------------------------------
@@ -196,13 +191,12 @@ class SelloPanel(QWidget):
             angle_deg=self._angle_value(),
             width_mm=self._spin_width.value(),
             pages="primera" if self._btn_primera.isChecked() else "todas",
-            enabled=self._chk_enable.isChecked(),
+            enabled=True,  # enabled state controlled by outer toggle in main window
         )
 
     def set_image_params(self, params: ImageStampParams) -> None:
         self._image_path = params.image_path
         self._lbl_file.setText(Path(params.image_path).name if params.image_path else "(ninguno)")
-        self._chk_enable.setChecked(params.enabled)
         if params.corner in self._corner_btns:
             self._corner_btns[params.corner].setChecked(True)
         self._spin_d1.setValue(params.d1_mm)

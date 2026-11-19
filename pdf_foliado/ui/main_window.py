@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._last_output_dir: Path | None = None
 
-        self.setWindowTitle("PDF Foliado")
+        self.setWindowTitle("PDF Foliado v5")
         self.setMinimumSize(900, 600)
         self._build_ui()
         # Apply skin after build so config_panel exists
@@ -136,8 +136,10 @@ class MainWindow(QMainWindow):
         root.addWidget(header)
 
         # --- columns ---
-        cols = QHBoxLayout()
-        cols.setSpacing(12)
+        from PySide6.QtWidgets import QSplitter
+        from PySide6.QtCore import Qt as _Qt
+        splitter = QSplitter(_Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
 
         # Left pane
         left = QVBoxLayout()
@@ -194,7 +196,7 @@ class MainWindow(QMainWindow):
 
         left_w = QWidget()
         left_w.setLayout(left)
-        cols.addWidget(left_w, 3)
+        splitter.addWidget(left_w)
 
         # Right pane — collapsible card design (accordion)
         from pdf_foliado.ui.config_panel import ConfigPanel
@@ -218,7 +220,6 @@ class MainWindow(QMainWindow):
             lambda: self._sello_card.set_checked(True))
 
         right_w = QWidget()
-        right_w.setMaximumWidth(400)
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
         right_vlay.setSpacing(0)
@@ -236,9 +237,10 @@ class MainWindow(QMainWindow):
         outer_scroll.setWidget(scroll_inner)
         right_vlay.addWidget(outer_scroll, 1)
 
-        cols.addWidget(right_w, 1)
+        splitter.addWidget(right_w)
+        splitter.setSizes([1000, 380])
 
-        root.addLayout(cols, 1)
+        root.addWidget(splitter, 1)
 
         # --- bottom bar ---
         bottom = QHBoxLayout()

@@ -178,18 +178,19 @@ class ConfigPanel(QWidget):
         lay.addLayout(form3)
 
         style_row = QHBoxLayout()
+        from PySide6.QtGui import QFont
         self._btn_bold = _ToggleButton("N")  # Negrita
-        self._btn_bold.setFixedWidth(36)
-        self._btn_bold.setStyleSheet(
-            "QPushButton { font-weight: 700; }"
-            "QPushButton:checked { font-weight: 700; }"
-        )
+        self._btn_bold.setFixedSize(44, 30)
+        bold_font = self._btn_bold.font()
+        bold_font.setBold(True)
+        bold_font.setPointSize(13)
+        self._btn_bold.setFont(bold_font)
         self._btn_italic = _ToggleButton("I")
-        self._btn_italic.setFixedWidth(36)
-        self._btn_italic.setStyleSheet(
-            "QPushButton { font-style: italic; }"
-            "QPushButton:checked { font-style: italic; }"
-        )
+        self._btn_italic.setFixedSize(44, 30)
+        italic_font = self._btn_italic.font()
+        italic_font.setItalic(True)
+        italic_font.setPointSize(13)
+        self._btn_italic.setFont(italic_font)
         style_row.addWidget(self._btn_bold)
         style_row.addWidget(self._btn_italic)
         style_row.addStretch()

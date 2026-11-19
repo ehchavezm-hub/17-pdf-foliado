@@ -78,7 +78,7 @@ class ConfigPanel(QWidget):
         # --- Iniciar / Prefijo ---
         form1 = QFormLayout()
         self._spin_start = QSpinBox()
-        self._spin_start.setRange(1, 9999)
+        self._spin_start.setRange(1, 999999)
         self._spin_start.setValue(1)
         form1.addRow("Iniciar desde:", self._spin_start)
         self._edit_prefix = QLineEdit()

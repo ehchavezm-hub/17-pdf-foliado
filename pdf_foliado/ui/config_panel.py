@@ -177,6 +177,24 @@ class ConfigPanel(QWidget):
         form3.addRow("Tamaño:", self._combo_size)
         lay.addLayout(form3)
 
+        style_row = QHBoxLayout()
+        self._btn_bold = _ToggleButton("N")  # Negrita
+        self._btn_bold.setFixedWidth(36)
+        self._btn_bold.setStyleSheet(
+            "QPushButton { font-weight: 700; }"
+            "QPushButton:checked { font-weight: 700; }"
+        )
+        self._btn_italic = _ToggleButton("I")
+        self._btn_italic.setFixedWidth(36)
+        self._btn_italic.setStyleSheet(
+            "QPushButton { font-style: italic; }"
+            "QPushButton:checked { font-style: italic; }"
+        )
+        style_row.addWidget(self._btn_bold)
+        style_row.addWidget(self._btn_italic)
+        style_row.addStretch()
+        lay.addLayout(style_row)
+
         # Folio color
         self._color_group = QButtonGroup(self)
         self._color_group.setExclusive(True)
@@ -209,6 +227,8 @@ class ConfigPanel(QWidget):
         self._spin_d2.valueChanged.connect(lambda _: self.config_changed.emit())
         self._combo_font.currentIndexChanged.connect(lambda _: self.config_changed.emit())
         self._combo_size.currentIndexChanged.connect(lambda _: self.config_changed.emit())
+        self._btn_bold.toggled.connect(lambda _: self.config_changed.emit())
+        self._btn_italic.toggled.connect(lambda _: self.config_changed.emit())
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -273,6 +293,8 @@ class ConfigPanel(QWidget):
             d2_mm=self._spin_d2.value(),
             font_name=self._combo_font.currentText(),
             font_size_pt=int(self._combo_size.currentText()),
+            font_bold=self._btn_bold.isChecked(),
+            font_italic=self._btn_italic.isChecked(),
             color_hex=color_hex,
             suffix_file=self._edit_suffix.text(),
             skin=self._skin,
@@ -300,6 +322,8 @@ class ConfigPanel(QWidget):
         idx2 = self._combo_size.findText(str(prefs.font_size_pt))
         if idx2 >= 0:
             self._combo_size.setCurrentIndex(idx2)
+        self._btn_bold.setChecked(prefs.font_bold)
+        self._btn_italic.setChecked(prefs.font_italic)
         for btn in self._color_group.buttons():
             if btn.property("color_hex") == prefs.color_hex:
                 btn.setChecked(True)
@@ -321,6 +345,8 @@ class ConfigPanel(QWidget):
                 d2_mm=prefs.d2_mm,
                 font_name=prefs.font_name,
                 font_size_pt=prefs.font_size_pt,
+                font_bold=prefs.font_bold,
+                font_italic=prefs.font_italic,
                 color_hex=prefs.color_hex,
             ),
         )

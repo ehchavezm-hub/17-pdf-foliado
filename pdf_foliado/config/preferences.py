@@ -16,6 +16,8 @@ class Preferences:
     d2_mm: float = 15.0
     font_name: str = "Roboto"
     font_size_pt: int = 12
+    font_bold: bool = False
+    font_italic: bool = False
     color_hex: str = "#231F20"
     suffix_file: str = "_fol"
     skin: str = "rojo"                # "rojo" | "azul" | "bosque"

@@ -36,6 +36,8 @@ class StampParams:
     font_name: str
     font_size_pt: float
     color_hex: str       # e.g. "#231F20"
+    font_bold: bool = False
+    font_italic: bool = False
 
 
 def stamp_page(
@@ -57,7 +59,8 @@ def stamp_page(
     d1 = params.d1_mm * MM_TO_PT
     d2 = params.d2_mm * MM_TO_PT
     fs = params.font_size_pt
-    text_width = stringWidth(folio_text, "Helvetica", fs)
+    rl_font = _rl_font_name(params.font_bold, params.font_italic)
+    text_width = stringWidth(folio_text, rl_font, fs)
 
     if pdf_corner == "BL":
         tx, ty = x0 + d2, y0 + d1
@@ -73,10 +76,32 @@ def stamp_page(
         tx, ty = x0 + w - d2 - text_width, y0 + h - d1 - fs
 
     r, g, b = _parse_hex_color(params.color_hex)
-    stamp = _make_stamp_pdf(tx, ty, fs, r, g, b, folio_text, x0, y0, w, h)
+    stamp = _make_stamp_pdf(tx, ty, fs, r, g, b, folio_text, x0, y0, w, h,
+                            params.font_bold, params.font_italic)
     page.add_overlay(stamp.pages[0])
 
     return page
+
+
+def _rl_font_name(bold: bool, italic: bool) -> str:
+    """Return the ReportLab font name for stringWidth measurement."""
+    if bold and italic:
+        return "Helvetica-BoldOblique"
+    if bold:
+        return "Helvetica-Bold"
+    if italic:
+        return "Helvetica-Oblique"
+    return "Helvetica"
+
+
+def _helvetica_name(bold: bool, italic: bool) -> str:
+    if bold and italic:
+        return "/Helvetica-BoldOblique"
+    if bold:
+        return "/Helvetica-Bold"
+    if italic:
+        return "/Helvetica-Oblique"
+    return "/Helvetica"
 
 
 def _make_stamp_pdf(
@@ -84,6 +109,7 @@ def _make_stamp_pdf(
     r: float, g: float, b: float,
     text: str,
     x0: float, y0: float, w: float, h: float,
+    bold: bool = False, italic: bool = False,
 ) -> pikepdf.Pdf:
     """Build a minimal single-page PDF containing just the folio stamp.
 
@@ -105,7 +131,7 @@ def _make_stamp_pdf(
     folio_font = pikepdf.Dictionary(
         Type=pikepdf.Name("/Font"),
         Subtype=pikepdf.Name("/Type1"),
-        BaseFont=pikepdf.Name("/Helvetica"),
+        BaseFont=pikepdf.Name(_helvetica_name(bold, italic)),
         Encoding=pikepdf.Name("/WinAnsiEncoding"),
     )
 

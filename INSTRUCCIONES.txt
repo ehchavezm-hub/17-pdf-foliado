@@ -1,47 +1,43 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║                     PDF Foliado                             ║
-║           Instrucciones para ejecutar con Python            ║
 ╚══════════════════════════════════════════════════════════════╝
 
-REQUISITO
-─────────
-  Python 3.13 o superior
-  Descargar: https://www.python.org/downloads/
+
+OPCIÓN 1 — EJECUTABLE (sin instalar Python)
+────────────────────────────────────────────
+  Descargar desde:
+  https://github.com/ehchavezm-hub/17-pdf-foliado/releases
+
+  1. Descargar  pdf-foliado.zip
+  2. Descomprimir en cualquier carpeta
+  3. Doble clic en  pdf-foliado.exe
+
+  Funciona desde cualquier ubicación del sistema.
 
 
-PASOS
-─────
+OPCIÓN 2 — CÓDIGO FUENTE (requiere Python 3.13+)
+──────────────────────────────────────────────────
+  Descargar Python: https://www.python.org/downloads/
 
-  1. Instalar dependencias (solo la primera vez):
+  Pasos (solo la primera vez):
 
-       pip install -r requirements.txt
+    1. Descomprimir el código fuente en cualquier carpeta
+    2. Abrir PowerShell dentro de esa carpeta
+    3. Instalar dependencias:
 
+         pip install -r requirements.txt
 
-  2. Ejecutar la aplicación:
+  Para ejecutar la aplicación (desde cualquier ubicación):
 
-       py pdf_foliado/main.py
+    — Doble clic en  iniciar.bat
+    — O desde PowerShell:  py pdf_foliado/main.py
 
 
 ESTRUCTURA DE CARPETAS
 ──────────────────────
-
   pdf_foliado/   →  Código fuente de la aplicación
   build/         →  Scripts para generar el ejecutable (.exe)
   docs/          →  Documentación interna
   tests/         →  Pruebas automáticas
-
-
-GENERAR EL EJECUTABLE (.exe)
-─────────────────────────────
-  Si quieres crear un .exe standalone para distribuir sin Python:
-
-    1. Ir a la carpeta build\
-    2. Ejecutar build.bat
-
-  El ejecutable quedará en build\dist\pdf-foliado\
-
-
-DESCARGA DIRECTA DEL .EXE
-──────────────────────────
-  Disponible en GitHub Releases — sin necesidad de Python:
-  https://github.com/ehchavezm-hub/17-pdf-foliado/releases
+  iniciar.bat    →  Lanzador de un clic
+  requirements.txt → Lista de dependencias

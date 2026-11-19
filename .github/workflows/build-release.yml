@@ -1,0 +1,61 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install PySide6 pikepdf reportlab pypdfium2 Pillow pyinstaller
+
+      - name: Build exe
+        working-directory: build
+        run: pyinstaller --clean pdf-foliado.spec
+
+      - name: Create ZIP
+        working-directory: build/dist
+        run: Compress-Archive -Path pdf-foliado -DestinationPath pdf-foliado.zip -Force
+        shell: powershell
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Última versión"
+          body: |
+            ## Descargas
+
+            | Opción | Para quién |
+            |--------|-----------|
+            | **pdf-foliado.zip** | Cualquier PC con Windows — sin instalar Python |
+            | **Código fuente** | Desarrolladores con Python 3.13+ |
+
+            ### Instalar (zip)
+            1. Descargar `pdf-foliado.zip`
+            2. Extraer en cualquier carpeta
+            3. Ejecutar `pdf-foliado.exe`
+
+            ### Correr con Python
+            ```
+            git clone https://github.com/${{ github.repository }}.git
+            cd pdf-foliado
+            pip install PySide6 pikepdf reportlab pypdfium2 Pillow
+            py pdf_foliado/main.py
+            ```
+          prerelease: false
+          make_latest: true
+          files: build/dist/pdf-foliado.zip

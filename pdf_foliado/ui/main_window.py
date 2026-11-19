@@ -62,10 +62,13 @@ class _CollapsibleCard(QWidget):
         self._chk.toggled.connect(self._on_toggled)
 
     def _update_hdr_style(self, expanded: bool) -> None:
+        from PySide6.QtGui import QPalette, QColor
+        pal = self._hdr.palette()
+        pal.setColor(QPalette.ColorRole.Window, QColor("#424242"))
+        self._hdr.setPalette(pal)
+        self._hdr.setAutoFillBackground(True)
         r = "5px 5px 0 0" if expanded else "5px"
-        self._hdr.setStyleSheet(
-            f"QWidget#cardHdr {{ background: #424242; border-radius: {r}; }}"
-        )
+        self._hdr.setStyleSheet(f"QWidget {{ border-radius: {r}; }}")
 
     def _on_toggled(self, checked: bool) -> None:
         self._body.setVisible(checked)

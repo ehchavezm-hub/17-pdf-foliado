@@ -218,6 +218,7 @@ class MainWindow(QMainWindow):
             lambda: self._sello_card.set_checked(True))
 
         right_w = QWidget()
+        right_w.setMaximumWidth(400)
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
         right_vlay.setSpacing(0)

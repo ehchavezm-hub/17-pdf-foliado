@@ -194,6 +194,7 @@ class MainWindow(QMainWindow):
         folio_text = f"{prefs.prefix}{prefs.start:04d}"
         self._preview.load_pdf(path)
         self._preview.update_folio(folio_text, self._config_panel.get_config([path]).stamp)
+        self._preview.update_image_stamp(self._sello_panel.get_image_params())
 
     @Slot()
     def _on_file_selected(self, current, previous) -> None:

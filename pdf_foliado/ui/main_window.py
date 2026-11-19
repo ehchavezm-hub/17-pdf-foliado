@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
         left.addWidget(btn_remove)
 
         self._preview = PreviewWidget()
-        self._preview.setMinimumHeight(360)
+        self._preview.setMinimumHeight(480)
         left.addWidget(self._preview, 1)
 
         left_w = QWidget()
@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
         outer_scroll.setWidget(scroll_inner)
         right_vlay.addWidget(outer_scroll, 1)
 
-        cols.addWidget(right_w, 2)
+        cols.addWidget(right_w, 1)
 
         root.addLayout(cols, 1)
 

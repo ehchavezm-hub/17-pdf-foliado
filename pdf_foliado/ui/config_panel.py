@@ -199,6 +199,17 @@ class ConfigPanel(QWidget):
 
         lay.addStretch()
 
+        # Connect all controls so preview refreshes on every change
+        self._corner_group.buttonClicked.connect(lambda _: self.config_changed.emit())
+        self._order_group.buttonClicked.connect(lambda _: self.config_changed.emit())
+        self._color_group.buttonClicked.connect(lambda _: self.config_changed.emit())
+        self._spin_start.valueChanged.connect(lambda _: self.config_changed.emit())
+        self._edit_prefix.textChanged.connect(lambda _: self.config_changed.emit())
+        self._spin_d1.valueChanged.connect(lambda _: self.config_changed.emit())
+        self._spin_d2.valueChanged.connect(lambda _: self.config_changed.emit())
+        self._combo_font.currentIndexChanged.connect(lambda _: self.config_changed.emit())
+        self._combo_size.currentIndexChanged.connect(lambda _: self.config_changed.emit())
+
     # ------------------------------------------------------------------
     @staticmethod
     def _section(title: str) -> QLabel:

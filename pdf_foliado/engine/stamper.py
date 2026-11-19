@@ -1,11 +1,10 @@
-"""PDF page stamper — reportlab overlay + pikepdf merge."""
+"""PDF page stamper — pure pikepdf content stream (no reportlab canvas)."""
 from __future__ import annotations
 import io
 from dataclasses import dataclass
 
 import pikepdf
-from reportlab.pdfgen import canvas as rl_canvas
-from reportlab.lib.colors import HexColor
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from pdf_foliado.utils.pdf_info import get_page_box, get_page_rotation
 
@@ -21,18 +20,13 @@ _CORNER_ROTATE: dict[tuple[str, int], str] = {
     ("BC", 0): "BC",   ("BC", 90): "BC",  ("BC", 180): "TC", ("BC", 270): "TC",
 }
 
-# Standard PDF Type1 fonts available without embedding
-_STANDARD_FONTS = {
-    "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
-    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
-    "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
-    "Symbol", "ZapfDingbats",
-}
+# Folio font key — deliberately unique to avoid collision with any document font.
+_FOLIO_FONT_KEY = "/FolioF"
 
 
 @dataclass
 class StampParams:
-    corner: str          # "TL" | "TR" | "BL" | "BR"
+    corner: str          # "TL" | "TC" | "TR" | "BL" | "BC" | "BR"
     d1_mm: float
     d2_mm: float
     font_name: str
@@ -46,9 +40,11 @@ def stamp_page(
     params: StampParams,
     owning_pdf: "pikepdf.Pdf | None" = None,
 ) -> pikepdf.Page:
-    """Stamp folio_text onto page in-place. Returns the same page object.
+    """Stamp folio_text onto page in-place using a direct PDF content stream.
 
-    owning_pdf must be provided when the page may have no /Contents (blank pages).
+    Builds the content stream directly (no reportlab canvas) so the font
+    selector and text draw are always in the same BT block, regardless of
+    what fonts the target PDF already uses.
     """
     x0, y0, w, h = get_page_box(page)
     rot = get_page_rotation(page)
@@ -57,16 +53,11 @@ def stamp_page(
     d1 = params.d1_mm * MM_TO_PT
     d2 = params.d2_mm * MM_TO_PT
     fs = params.font_size_pt
-    rl_font = _rl_font_name(params.font_name)
 
-    # Build overlay PDF via reportlab (page sized to full media box)
-    buf = io.BytesIO()
-    c = rl_canvas.Canvas(buf, pagesize=(x0 + w, y0 + h))
-    c.setFont(rl_font, fs)
-    c.setFillColor(HexColor(params.color_hex))
+    # Measure text width using Helvetica metrics (the font we will embed)
+    text_width = stringWidth(folio_text, "Helvetica", fs)
 
     # Compute anchor position in PDF-space
-    text_width = c.stringWidth(folio_text, rl_font, fs)
     if pdf_corner == "BL":
         tx, ty = x0 + d2, y0 + d1
     elif pdf_corner == "BR":
@@ -80,126 +71,117 @@ def stamp_page(
     else:  # TR
         tx, ty = x0 + w - d2 - text_width, y0 + h - d1 - fs
 
-    c.drawString(tx, ty, folio_text)
-    c.save()
-    buf.seek(0)
+    # Ensure /FolioF (Helvetica) is registered on this page
+    _ensure_folio_font(page)
 
-    # Extract overlay content and copy font resources while overlay_pdf is open
-    with pikepdf.open(buf) as overlay_pdf:
-        overlay_page = overlay_pdf.pages[0]
-        overlay_content = _get_content_bytes(overlay_page)
-        key_map = _copy_overlay_fonts(page, overlay_page)
-        # Patch content stream if any font key was renamed to avoid collisions
-        overlay_content = _remap_font_keys(overlay_content, key_map)
+    # Build the folio content stream: color + BT…ET with font set inside
+    r, g, b = _parse_hex_color(params.color_hex)
+    folio_stream = _build_folio_stream(tx, ty, fs, r, g, b, folio_text)
 
-    # Coalesce page content to a single stream, then append overlay
+    # Append to page content
     page.contents_coalesce()
-    if "/Contents" not in page:
+    cs_ref = page.get("/Contents")
+    if cs_ref is None:
         if owning_pdf is None:
             raise ValueError(
                 "stamp_page: page has no /Contents — pass owning_pdf to stamp blank pages"
             )
-        _write_fresh_content(page, overlay_content, owning_pdf)
-    else:
-        content_obj = page["/Contents"]
-        existing = bytes(content_obj.read_raw_bytes())
-        try:
-            existing = bytes(content_obj.read_bytes())
-        except Exception:
-            pass
-        new_data = existing + b"\nq\n" + overlay_content + b"\nQ\n"
-        content_obj.write(new_data)
-
-    return page
-
-
-def _get_content_bytes(page: pikepdf.Page) -> bytes:
-    """Return decompressed content stream bytes of page."""
-    if "/Contents" not in page:
-        return b""
-    cs = page["/Contents"]
-    if isinstance(cs, pikepdf.Array):
+        page["/Contents"] = pikepdf.Stream(owning_pdf, folio_stream)
+    elif isinstance(cs_ref, pikepdf.Array):
+        # contents_coalesce() failed; merge manually
         parts = []
-        for s in cs:
+        for s in cs_ref:
             try:
                 parts.append(bytes(s.read_bytes()))
             except Exception:
                 parts.append(bytes(s.read_raw_bytes()))
-        return b"".join(parts)
-    try:
-        return bytes(cs.read_bytes())
-    except Exception:
-        return bytes(cs.read_raw_bytes())
+        existing = b"".join(parts)
+        try:
+            cs_ref[0].write(existing + b"\n" + folio_stream)
+            # Coalesce again now that it's one stream
+            page.contents_coalesce()
+        except Exception:
+            # Last resort: replace /Contents with a new merged stream
+            if owning_pdf:
+                page["/Contents"] = pikepdf.Stream(owning_pdf, existing + b"\n" + folio_stream)
+    else:
+        try:
+            existing = bytes(cs_ref.read_bytes())
+        except Exception:
+            existing = bytes(cs_ref.read_raw_bytes())
+        cs_ref.write(existing + b"\n" + folio_stream)
+
+    return page
 
 
-def _copy_overlay_fonts(
-    target_page: pikepdf.Page, overlay_page: pikepdf.Page
-) -> dict[str, str]:
-    """Copy font resources from overlay page to target page.
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    Returns a mapping {original_key: target_key}. When the original key already
-    exists in the target page's resources, a unique replacement key is generated
-    so the caller can patch the overlay content stream accordingly.
-    """
-    key_map: dict[str, str] = {}
-    try:
-        overlay_fonts = overlay_page["/Resources"]["/Font"]
-    except KeyError:
-        return key_map
-
-    if "/Resources" not in target_page:
-        target_page["/Resources"] = pikepdf.Dictionary()
-    res = target_page["/Resources"]
+def _ensure_folio_font(page: pikepdf.Page) -> None:
+    """Add /FolioF → Helvetica/WinAnsiEncoding to the page's font resources."""
+    if "/Resources" not in page:
+        page["/Resources"] = pikepdf.Dictionary()
+    res = page["/Resources"]
     if "/Font" not in res:
         res["/Font"] = pikepdf.Dictionary()
     font_dict = res["/Font"]
-
-    for key in overlay_fonts.keys():
-        target_key = key
-        # If this key already exists in the target, pick a unique name to avoid
-        # clobbering the existing font and silently misdirecting the content stream.
-        if key in font_dict:
-            i = 0
-            while f"/FolF{i}" in font_dict:
-                i += 1
-            target_key = f"/FolF{i}"
-
-        src = overlay_fonts[key]
-        new_font = pikepdf.Dictionary(
+    if _FOLIO_FONT_KEY not in font_dict:
+        font_dict[_FOLIO_FONT_KEY] = pikepdf.Dictionary(
             Type=pikepdf.Name("/Font"),
-            Subtype=src.get("/Subtype", pikepdf.Name("/Type1")),
-            BaseFont=src["/BaseFont"],
+            Subtype=pikepdf.Name("/Type1"),
+            BaseFont=pikepdf.Name("/Helvetica"),
+            Encoding=pikepdf.Name("/WinAnsiEncoding"),
         )
-        if "/Encoding" in src:
-            new_font["/Encoding"] = src["/Encoding"]
-        font_dict[target_key] = new_font
-        key_map[key] = target_key
-
-    return key_map
 
 
-def _remap_font_keys(content: bytes, key_map: dict[str, str]) -> bytes:
-    """Patch font key references in a PDF content stream byte string."""
-    for old_key, new_key in key_map.items():
-        if old_key == new_key:
-            continue
-        # In PDF content streams font selection looks like: /F1 12 Tf
-        old_ref = old_key.encode() + b" "
-        new_ref = new_key.encode() + b" "
-        content = content.replace(old_ref, new_ref)
-    return content
+def _build_folio_stream(
+    tx: float, ty: float, fs: float,
+    r: float, g: float, b: float,
+    text: str,
+) -> bytes:
+    """Return a self-contained PDF content stream bytes for one folio stamp.
+
+    The font selector (/FolioF Tf) is inside the BT…ET block so it is always
+    active when the text is drawn, regardless of surrounding page state.
+    """
+    escaped = _pdf_escape(text)
+    stream = (
+        f"q\n"
+        f"{r:.5f} {g:.5f} {b:.5f} rg\n"
+        f"BT\n"
+        f"{_FOLIO_FONT_KEY} {fs:.2f} Tf\n"
+        f"1 0 0 1 {tx:.4f} {ty:.4f} Tm\n"
+        f"({escaped}) Tj\n"
+        f"ET\n"
+        f"Q\n"
+    )
+    return stream.encode("cp1252", errors="replace")
 
 
-def _write_fresh_content(
-    page: pikepdf.Page, content: bytes, owning_pdf: pikepdf.Pdf
-) -> None:
-    """Write content to a page that has no /Contents yet."""
-    page["/Contents"] = pikepdf.Stream(owning_pdf, b"q\n" + content + b"\nQ\n")
+def _pdf_escape(text: str) -> str:
+    """Escape special characters for use inside a PDF string literal ( … )."""
+    out = []
+    for ch in text:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == "(":
+            out.append("\\(")
+        elif ch == ")":
+            out.append("\\)")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\n":
+            out.append("\\n")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
-def _rl_font_name(font_name: str) -> str:
-    """Map UI font name to a reportlab/PDF standard font name."""
-    return "Helvetica"  # all 13 UI fonts fall back to Helvetica for stamping
+def _parse_hex_color(hex_color: str) -> tuple[float, float, float]:
+    """'#RRGGBB' → (r, g, b) each in [0.0, 1.0]."""
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
 
 
 def folio_overflow_warning(
@@ -207,12 +189,9 @@ def folio_overflow_warning(
     folio_text: str,
     params: StampParams,
 ) -> str | None:
-    """Return a warning string if folio text would overflow the CropBox width, else None."""
+    """Return a warning if folio text would overflow the page width, else None."""
     _x0, _y0, w, _h = get_page_box(page)
-    rl_font = _rl_font_name(params.font_name)
-    # Approximate text width using reportlab metrics
-    from reportlab.pdfbase.pdfmetrics import stringWidth
-    text_width = stringWidth(folio_text, rl_font, params.font_size_pt)
+    text_width = stringWidth(folio_text, "Helvetica", params.font_size_pt)
     d2 = params.d2_mm * MM_TO_PT
     if d2 + text_width > w:
         return (

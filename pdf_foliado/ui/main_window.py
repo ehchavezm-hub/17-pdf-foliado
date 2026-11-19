@@ -28,19 +28,13 @@ class _CollapsibleCard(QWidget):
         # Header band
         self._hdr = QWidget()
         self._hdr.setObjectName("cardHdr")
-        self._hdr.setStyleSheet(
-            "QWidget#cardHdr {"
-            "  background: #EEEEEE;"
-            "  border-top-left-radius: 5px;"
-            "  border-top-right-radius: 5px;"
-            "}"
-        )
         hdr_lay = QHBoxLayout(self._hdr)
-        hdr_lay.setContentsMargins(12, 9, 12, 9)
+        hdr_lay.setContentsMargins(12, 10, 12, 10)
         hdr_lay.setSpacing(8)
 
         self._chk = QCheckBox(title)
         self._chk.setChecked(checked)
+        self._chk.setStyleSheet("QCheckBox { color: white; }")
         font = self._chk.font()
         font.setPointSize(11)
         font.setBold(True)
@@ -50,10 +44,11 @@ class _CollapsibleCard(QWidget):
 
         self._arrow = QLabel("▾" if checked else "▸")
         self._arrow.setStyleSheet(
-            "color: #757575; font-size: 14px; background: transparent; border: none;"
+            "color: white; font-size: 14px; background: transparent; border: none;"
         )
         hdr_lay.addWidget(self._arrow)
         lay.addWidget(self._hdr)
+        self._update_hdr_style(checked)
 
         # Body
         self._body = QWidget()
@@ -66,9 +61,16 @@ class _CollapsibleCard(QWidget):
         self._body.setVisible(checked)
         self._chk.toggled.connect(self._on_toggled)
 
+    def _update_hdr_style(self, expanded: bool) -> None:
+        r = "5px 5px 0 0" if expanded else "5px"
+        self._hdr.setStyleSheet(
+            f"QWidget#cardHdr {{ background: #424242; border-radius: {r}; }}"
+        )
+
     def _on_toggled(self, checked: bool) -> None:
         self._body.setVisible(checked)
         self._arrow.setText("▾" if checked else "▸")
+        self._update_hdr_style(checked)
         self.state_changed.emit(checked)
 
     def is_checked(self) -> bool:
@@ -190,7 +192,7 @@ class MainWindow(QMainWindow):
 
         left_w = QWidget()
         left_w.setLayout(left)
-        cols.addWidget(left_w, 2)
+        cols.addWidget(left_w, 3)
 
         # Right pane — collapsible card design (accordion)
         from pdf_foliado.ui.config_panel import ConfigPanel
@@ -231,7 +233,7 @@ class MainWindow(QMainWindow):
         outer_scroll.setWidget(scroll_inner)
         right_vlay.addWidget(outer_scroll, 1)
 
-        cols.addWidget(right_w, 3)
+        cols.addWidget(right_w, 2)
 
         root.addLayout(cols, 1)
 

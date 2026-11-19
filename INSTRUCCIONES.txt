@@ -2,42 +2,22 @@
 ║                     PDF Foliado                             ║
 ╚══════════════════════════════════════════════════════════════╝
 
+Descargar desde:
+https://github.com/ehchavezm-hub/17-pdf-foliado/releases
 
-OPCIÓN 1 — EJECUTABLE (sin instalar Python)
-────────────────────────────────────────────
-  Descargar desde:
-  https://github.com/ehchavezm-hub/17-pdf-foliado/releases
 
+OPCIÓN 1 — EJECUTABLE  (sin Python)
+─────────────────────────────────────
   1. Descargar  pdf-foliado.zip
-  2. Descomprimir en cualquier carpeta
+  2. Descomprimir
   3. Doble clic en  pdf-foliado.exe
 
-  Funciona desde cualquier ubicación del sistema.
 
-
-OPCIÓN 2 — CÓDIGO FUENTE (requiere Python 3.13+)
-──────────────────────────────────────────────────
+OPCIÓN 2 — CÓDIGO FUENTE  (requiere Python 3.13+)
+───────────────────────────────────────────────────
   Descargar Python: https://www.python.org/downloads/
 
-  Pasos (solo la primera vez):
-
-    1. Descomprimir el código fuente en cualquier carpeta
-    2. Abrir PowerShell dentro de esa carpeta
-    3. Instalar dependencias:
-
-         pip install -r requirements.txt
-
-  Para ejecutar la aplicación (desde cualquier ubicación):
-
-    — Doble clic en  iniciar.bat
-    — O desde PowerShell:  py pdf_foliado/main.py
-
-
-ESTRUCTURA DE CARPETAS
-──────────────────────
-  pdf_foliado/   →  Código fuente de la aplicación
-  build/         →  Scripts para generar el ejecutable (.exe)
-  docs/          →  Documentación interna
-  tests/         →  Pruebas automáticas
-  iniciar.bat    →  Lanzador de un clic
-  requirements.txt → Lista de dependencias
+  1. Descargar  Source code (zip)
+  2. Descomprimir
+  3. Doble clic en  iniciar.bat
+     (instala dependencias y abre la app automáticamente)

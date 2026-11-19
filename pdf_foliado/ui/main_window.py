@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
             lambda: self._sello_card.set_checked(True))
 
         right_w = QWidget()
-        right_w.setMaximumWidth(440)
+        right_w.setMinimumWidth(380)
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
         right_vlay.setSpacing(0)
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         right_vlay.addWidget(outer_scroll, 1)
 
         splitter.addWidget(right_w)
-        splitter.setSizes([1000, 440])
+        splitter.setSizes([800, 500])
 
         root.addWidget(splitter, 1)
 

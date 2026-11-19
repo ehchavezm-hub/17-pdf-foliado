@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
         header = QWidget()
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(0, 0, 0, 0)
-        title = QLabel("PDF Foliado")
+        title = QLabel("PDF Foliado v6")
         title.setStyleSheet("font-size: 18px; font-weight: 700;")
         h_lay.addWidget(title)
         h_lay.addStretch()
@@ -220,6 +220,7 @@ class MainWindow(QMainWindow):
             lambda: self._sello_card.set_checked(True))
 
         right_w = QWidget()
+        right_w.setMaximumWidth(380)
         right_vlay = QVBoxLayout(right_w)
         right_vlay.setContentsMargins(0, 0, 0, 0)
         right_vlay.setSpacing(0)

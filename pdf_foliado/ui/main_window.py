@@ -63,11 +63,24 @@ class _CollapsibleCard(QWidget):
 
     def _update_hdr_style(self, expanded: bool) -> None:
         r = "5px 5px 0 0" if expanded else "5px"
-        # Use ID selector so this rule beats the global QWidget rule in build_stylesheet.
-        # Widget-own stylesheet overrides app stylesheet; #id beats type selector.
-        self._hdr.setStyleSheet(
-            f"QWidget#cardHdr {{ background-color: #424242; border-radius: {r}; }}"
-        )
+        # Parent's own stylesheet cuts off app-stylesheet inheritance for children,
+        # so we must cover child colors here via descendant selectors.
+        self._hdr.setStyleSheet(f"""
+            QWidget#cardHdr {{
+                background-color: #424242;
+                border-radius: {r};
+            }}
+            QWidget#cardHdr QCheckBox {{
+                color: white;
+                font-weight: bold;
+                font-size: 13px;
+                background: transparent;
+            }}
+            QWidget#cardHdr QLabel {{
+                color: white;
+                background: transparent;
+            }}
+        """)
 
     def _on_toggled(self, checked: bool) -> None:
         self._body.setVisible(checked)

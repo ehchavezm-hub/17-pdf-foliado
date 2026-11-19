@@ -88,12 +88,12 @@ def _make_pikepdf_only_pdf(path: Path, with_contents: bool = True) -> None:
     pdf.close()
 
 
-def test_font_resource_key_matches_content_stream(tmp_path):
-    """Font resource keys must match what the overlay content stream references.
+def test_folio_uses_xobject_overlay(tmp_path):
+    """After stamping, the folio must be embedded as a Form XObject overlay.
 
-    For a pikepdf-only PDF (no reportlab pre-existing /F1), after stamping the
-    font resource key added to the page must be /F1 (the key the overlay uses),
-    not a different key like /Fol1.
+    The add_overlay approach stores the folio font in the XObject's own
+    /Resources, completely isolated from the page's existing fonts.
+    This is the invariant that prevents invisible/garbled folios on complex PDFs.
     """
     p = tmp_path / "pikepdf_only.pdf"
     _make_pikepdf_only_pdf(p, with_contents=True)
@@ -105,26 +105,22 @@ def test_font_resource_key_matches_content_stream(tmp_path):
 
     with pikepdf.open(out) as pdf:
         page = pdf.pages[0]
-        content = bytes(page["/Contents"].read_bytes()).decode("latin-1")
-        font_refs = set(re.findall(r'(/\w+)\s+[\d.]+\s+Tf', content))
-        font_keys = set(str(k) for k in page["/Resources"]["/Font"].keys())
-        for ref in font_refs:
-            assert ref in font_keys, (
-                f"Font {ref} referenced in content stream but not in /Resources/Font. "
-                f"Available keys: {font_keys}"
-            )
+        # Page resources must have an XObject (the folio overlay)
+        assert "/XObject" in page.resources, \
+            "Page must have /XObject resources after stamping (add_overlay)"
+
+        # The XObject must be a Form XObject with Helvetica font in its resources
+        found_helvetica = _xobject_has_helvetica(page)
+        assert found_helvetica, \
+            "Folio XObject must contain a Helvetica /Type1 font resource"
 
 
 def test_stamp_pdf_with_preexisting_f1_font(tmp_path):
-    """Stamping a reportlab PDF (which already has /F1) must not silently misdirect the folio font.
+    """Stamping a PDF with existing /F1 must preserve it and add an isolated XObject.
 
-    The font key collision fix renames the overlay font to /FolF0 and patches the
-    content stream, so the folio still appears with the correct font.
-    After stamping, every font reference in the content stream must resolve to a
-    key that exists in the page's /Resources/Font dict.
+    The add_overlay approach never modifies the page's existing font resources.
+    The folio font lives only inside the XObject — zero collision risk.
     """
-    # Build a reportlab PDF — it registers /F1 internally, so the target page
-    # already has /F1 in its resources before we stamp.
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.pagesizes import A4
     p = tmp_path / "rl_has_f1.pdf"
@@ -140,17 +136,19 @@ def test_stamp_pdf_with_preexisting_f1_font(tmp_path):
 
     with pikepdf.open(out) as pdf:
         page = pdf.pages[0]
-        content = bytes(page["/Contents"].read_bytes()).decode("latin-1")
-        font_refs = set(re.findall(r'(/\w+)\s+[\d.]+\s+Tf', content))
-        font_keys = set(str(k) for k in page["/Resources"]["/Font"].keys())
-        assert len(font_refs) >= 2, (
-            "Expected at least 2 font references: one from the original doc and one for the folio"
-        )
-        for ref in font_refs:
-            assert ref in font_keys, (
-                f"Font {ref} referenced in content stream but not in /Resources/Font. "
-                f"Available keys: {font_keys}"
-            )
+        # Original page fonts must be preserved
+        font_keys = set(str(k) for k in page.resources.get("/Font", {}).keys())
+        assert len(font_keys) > 0, \
+            "Original document fonts must still be in page resources"
+
+        # An XObject must have been added (the folio overlay)
+        assert "/XObject" in page.resources, \
+            "Page must have /XObject resources after stamping (add_overlay)"
+
+        # The XObject must have its own Helvetica font (not in the page's Font dict)
+        found_helvetica = _xobject_has_helvetica(page)
+        assert found_helvetica, \
+            "Folio XObject must contain an isolated Helvetica font resource"
 
 
 def test_blank_page_no_contents_stamps_successfully(tmp_path):
@@ -168,3 +166,24 @@ def test_blank_page_no_contents_stamps_successfully(tmp_path):
     with pikepdf.open(out) as pdf:
         assert len(pdf.pages) == 1
         assert "/Contents" in pdf.pages[0]
+
+
+def _xobject_has_helvetica(page: pikepdf.Page) -> bool:
+    """Return True if any Form XObject in the page's resources has a Helvetica font."""
+    xobjects = page.resources.get("/XObject", {})
+    for xobj in xobjects.values():
+        if not isinstance(xobj, pikepdf.Stream):
+            continue
+        xobj_res = xobj.stream_dict.get("/Resources")
+        if xobj_res is None:
+            continue
+        fonts = xobj_res.get("/Font", {})
+        if not hasattr(fonts, "values"):
+            continue
+        for font_val in fonts.values():
+            if not hasattr(font_val, "get"):
+                continue
+            base_font = font_val.get("/BaseFont")
+            if base_font is not None and str(base_font) == "/Helvetica":
+                return True
+    return False

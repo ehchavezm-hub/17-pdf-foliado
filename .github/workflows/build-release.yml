@@ -43,10 +43,11 @@ jobs:
           Expand-Archive -Path "python-embed.zip" -DestinationPath "portable\python" -Force
           Remove-Item "python-embed.zip"
 
-          # Habilitar site-packages en Python embebido
+          # Habilitar site-packages en Python embebido y agregar app root al path
           $pthFile = Get-ChildItem "portable\python" -Filter "*._pth" | Select-Object -First 1
-          (Get-Content $pthFile.FullName) -replace '#import site', 'import site' |
-            Set-Content $pthFile.FullName
+          $pthContent = (Get-Content $pthFile.FullName) -replace '#import site', 'import site'
+          $pthContent += ".."
+          $pthContent | Set-Content $pthFile.FullName
 
           # Instalar pip
           Write-Host "Instalando pip..."

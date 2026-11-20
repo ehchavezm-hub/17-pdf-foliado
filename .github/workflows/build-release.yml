@@ -64,17 +64,16 @@ jobs:
           Copy-Item -Path "pdf_foliado" -Destination "portable\pdf_foliado" -Recurse
           Copy-Item -Path "requirements.txt" -Destination "portable\requirements.txt"
 
-          # Crear iniciar.bat para el portable
-          $bat = '@echo off
-cd /d "%~dp0"
-set PYTHONPATH=%~dp0
-python\python.exe pdf_foliado\main.py
-if errorlevel 1 (
-    echo.
-    echo ERROR al iniciar. Presiona una tecla...
-    pause
-)'
-          Set-Content "portable\iniciar.bat" -Value $bat -Encoding ASCII
+          # Crear iniciar.bat para el portable (una linea por vez para evitar problemas YAML)
+          "@echo off"                                    | Set-Content  "portable\iniciar.bat" -Encoding ASCII
+          'cd /d "%~dp0"'                               | Add-Content  "portable\iniciar.bat"
+          "set PYTHONPATH=%~dp0"                        | Add-Content  "portable\iniciar.bat"
+          "python\python.exe pdf_foliado\main.py"       | Add-Content  "portable\iniciar.bat"
+          "if errorlevel 1 ("                           | Add-Content  "portable\iniciar.bat"
+          "    echo."                                   | Add-Content  "portable\iniciar.bat"
+          "    echo ERROR al iniciar. Presiona tecla..."| Add-Content  "portable\iniciar.bat"
+          "    pause"                                   | Add-Content  "portable\iniciar.bat"
+          ")"                                           | Add-Content  "portable\iniciar.bat"
 
           # Crear zip portable
           Write-Host "Creando pdf-foliado-portable.zip..."

@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -26,10 +26,60 @@ jobs:
         working-directory: build
         run: pyinstaller --clean pdf-foliado.spec
 
-      - name: Create ZIP
+      - name: Create EXE ZIP
         working-directory: build/dist
         run: Compress-Archive -Path pdf-foliado -DestinationPath pdf-foliado.zip -Force
         shell: powershell
+
+      - name: Build portable package (Python + libs incluidos)
+        shell: powershell
+        run: |
+          $version = "3.12.7"
+          $url = "https://www.python.org/ftp/python/$version/python-$version-embed-amd64.zip"
+
+          Write-Host "Descargando Python $version embebido..."
+          Invoke-WebRequest -Uri $url -OutFile "python-embed.zip" -UseBasicParsing
+          New-Item -ItemType Directory -Path "portable\python" -Force | Out-Null
+          Expand-Archive -Path "python-embed.zip" -DestinationPath "portable\python" -Force
+          Remove-Item "python-embed.zip"
+
+          # Habilitar site-packages en Python embebido
+          $pthFile = Get-ChildItem "portable\python" -Filter "*._pth" | Select-Object -First 1
+          (Get-Content $pthFile.FullName) -replace '#import site', 'import site' |
+            Set-Content $pthFile.FullName
+
+          # Instalar pip
+          Write-Host "Instalando pip..."
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "get-pip.py" -UseBasicParsing
+          & "portable\python\python.exe" "get-pip.py" --no-warn-script-location -q
+          Remove-Item "get-pip.py"
+
+          # Instalar dependencias de la app
+          Write-Host "Instalando dependencias..."
+          & "portable\python\python.exe" -m pip install `
+            PySide6 pikepdf reportlab pypdfium2 Pillow `
+            --no-warn-script-location -q
+
+          # Copiar código de la app
+          Copy-Item -Path "pdf_foliado" -Destination "portable\pdf_foliado" -Recurse
+          Copy-Item -Path "requirements.txt" -Destination "portable\requirements.txt"
+
+          # Crear iniciar.bat para el portable
+          $bat = '@echo off
+cd /d "%~dp0"
+set PYTHONPATH=%~dp0
+python\python.exe pdf_foliado\main.py
+if errorlevel 1 (
+    echo.
+    echo ERROR al iniciar. Presiona una tecla...
+    pause
+)'
+          Set-Content "portable\iniciar.bat" -Value $bat -Encoding ASCII
+
+          # Crear zip portable
+          Write-Host "Creando pdf-foliado-portable.zip..."
+          Compress-Archive -Path "portable\*" -DestinationPath "pdf-foliado-portable.zip" -Force
+          Write-Host "Portable listo."
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
@@ -39,23 +89,23 @@ jobs:
           body: |
             ## Descargas
 
-            | Opción | Para quién |
-            |--------|-----------|
-            | **pdf-foliado.zip** | Cualquier PC con Windows — sin instalar Python |
-            | **Código fuente** | Desarrolladores con Python 3.13+ |
+            | Archivo | Para quién |
+            |---------|-----------|
+            | **pdf-foliado.zip** | Cualquier PC Windows — sin Python (exe) |
+            | **pdf-foliado-portable.zip** | PC sin permisos de instalación — Python incluido, solo descomprimir y ejecutar `iniciar.bat` |
 
-            ### Instalar (zip)
+            ### Opción 1 — EXE (más simple)
             1. Descargar `pdf-foliado.zip`
             2. Extraer en cualquier carpeta
             3. Ejecutar `pdf-foliado.exe`
 
-            ### Correr con Python
-            ```
-            git clone https://github.com/${{ github.repository }}.git
-            cd pdf-foliado
-            pip install PySide6 pikepdf reportlab pypdfium2 Pillow
-            py pdf_foliado/main.py
-            ```
+            ### Opción 2 — Portable con Python incluido
+            1. Descargar `pdf-foliado-portable.zip`
+            2. Extraer en cualquier carpeta
+            3. Doble clic en `iniciar.bat`
+            _(No requiere instalar Python ni librerías)_
           prerelease: false
           make_latest: true
-          files: build/dist/pdf-foliado.zip
+          files: |
+            build/dist/pdf-foliado.zip
+            pdf-foliado-portable.zip

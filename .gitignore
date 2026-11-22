@@ -12,3 +12,5 @@ build/__pycache__/
 tests/_generated/
 *.log
 datos/
+.venv/
+clonar_y_ejecutar.cmd

@@ -2,7 +2,8 @@
 from __future__ import annotations
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QButtonGroup, QDoubleSpinBox,
@@ -33,22 +34,43 @@ class SelloPanel(QWidget):
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 8)
-        lay.setSpacing(14)
+        lay.setContentsMargins(0, 0, 0, 4)
+        lay.setSpacing(8)
 
         # --- Imagen ---
         lay.addWidget(self._section("Archivo de imagen"))
         img_row = QHBoxLayout()
-        self._btn_browse = QPushButton("Seleccionar…")
-        self._btn_browse.setObjectName("secondary")
-        self._btn_browse.setFixedWidth(110)
-        self._btn_browse.clicked.connect(self._on_browse)
-        self._lbl_file = QLabel("(ninguno)")
-        self._lbl_file.setStyleSheet("color: #757575; font-size: 11px;")
+        img_row.setSpacing(8)
+        self._thumb = QLabel()
+        self._thumb.setFixedSize(56, 56)
+        self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._thumb.setStyleSheet(
+            "QLabel { border: 1px dashed #BDBDBD; border-radius: 4px;"
+            " background: white; color: #9E9E9E; font-size: 10px; }")
+        img_row.addWidget(self._thumb)
+        info_col = QVBoxLayout()
+        info_col.setSpacing(4)
+        self._lbl_file = QLabel("Ninguna imagen elegida")
+        self._lbl_file.setObjectName("hint")
         self._lbl_file.setWordWrap(True)
-        img_row.addWidget(self._btn_browse)
-        img_row.addWidget(self._lbl_file, 1)
+        info_col.addWidget(self._lbl_file)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(4)
+        self._btn_browse = QPushButton("Elegir imagen…")
+        self._btn_browse.setObjectName("secondary")
+        self._btn_browse.setToolTip("PNG con fondo transparente da el mejor resultado")
+        self._btn_browse.clicked.connect(self._on_browse)
+        self._btn_clear = QPushButton("Quitar")
+        self._btn_clear.setObjectName("ghost")
+        self._btn_clear.setToolTip("Quitar la imagen del sello")
+        self._btn_clear.clicked.connect(self._on_clear)
+        btn_row.addWidget(self._btn_browse)
+        btn_row.addWidget(self._btn_clear)
+        btn_row.addStretch()
+        info_col.addLayout(btn_row)
+        img_row.addLayout(info_col, 1)
         lay.addLayout(img_row)
+        self._refresh_file_display()
 
         # --- Posición ---
         lay.addWidget(self._section("Posición del sello"))
@@ -97,6 +119,8 @@ class SelloPanel(QWidget):
         self._combo_angle.addItems(_ANGLE_PRESETS)
         self._combo_angle.setCurrentText("0")
         self._combo_angle.lineEdit().setPlaceholderText("ej. 37")
+        self._combo_angle.setToolTip(
+            "Grados en sentido antihorario. Puedes escribir cualquier valor.")
         angle_row.addWidget(self._combo_angle, 1)
         angle_row.addWidget(QLabel("°"))
         lay.addLayout(angle_row)
@@ -109,8 +133,8 @@ class SelloPanel(QWidget):
         self._spin_width.setValue(30.0)
         self._spin_width.setSuffix(" mm")
         form2.addRow("Ancho:", self._spin_width)
-        self._lbl_height_note = QLabel("Alto: proporcional al archivo")
-        self._lbl_height_note.setStyleSheet("color: #757575; font-size: 11px;")
+        self._lbl_height_note = QLabel("Alto: proporcional a la imagen")
+        self._lbl_height_note.setObjectName("hint")
         form2.addRow("", self._lbl_height_note)
         lay.addLayout(form2)
 
@@ -141,11 +165,43 @@ class SelloPanel(QWidget):
     @staticmethod
     def _section(title: str) -> QLabel:
         lbl = QLabel(title)
-        lbl.setStyleSheet(
-            "font-weight: 700; font-size: 12px; color: #616161;"
-            "border-bottom: 1px solid #E0E0E0; padding-bottom: 2px;"
-        )
+        lbl.setObjectName("sectionTitle")
         return lbl
+
+    def _refresh_file_display(self) -> None:
+        path = self._image_path
+        if path and Path(path).is_file():
+            pix = QPixmap(path)
+            if not pix.isNull():
+                self._thumb.setPixmap(pix.scaled(
+                    52, 52, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation))
+            else:
+                self._thumb.setPixmap(QPixmap())
+                self._thumb.setText("?")
+            self._lbl_file.setText(Path(path).name)
+            self._lbl_file.setToolTip(path)
+            self._btn_clear.setEnabled(True)
+        elif path:
+            self._thumb.setPixmap(QPixmap())
+            self._thumb.setText("no\nencontrada")
+            self._lbl_file.setText(f"No se encuentra: {Path(path).name}")
+            self._lbl_file.setToolTip(path)
+            self._btn_clear.setEnabled(True)
+        else:
+            self._thumb.setPixmap(QPixmap())
+            self._thumb.setText("sin\nimagen")
+            self._lbl_file.setText("Ninguna imagen elegida")
+            self._lbl_file.setToolTip("")
+            self._btn_clear.setEnabled(False)
+
+    def _on_clear(self) -> None:
+        self._image_path = ""
+        self._refresh_file_display()
+        self.config_changed.emit()
+
+    def has_image(self) -> bool:
+        return bool(self._image_path) and Path(self._image_path).is_file()
 
     def _on_browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -155,7 +211,7 @@ class SelloPanel(QWidget):
         )
         if path:
             self._image_path = path
-            self._lbl_file.setText(Path(path).name)
+            self._refresh_file_display()
             self.image_selected.emit()
             self.config_changed.emit()
 
@@ -185,7 +241,7 @@ class SelloPanel(QWidget):
 
     def set_image_params(self, params: ImageStampParams) -> None:
         self._image_path = params.image_path
-        self._lbl_file.setText(Path(params.image_path).name if params.image_path else "(ninguno)")
+        self._refresh_file_display()
         if params.corner in self._corner_btns:
             self._corner_btns[params.corner].setChecked(True)
         self._spin_d1.setValue(params.d1_mm)

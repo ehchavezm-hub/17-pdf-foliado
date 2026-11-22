@@ -3,12 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtGui import (
+    QColor, QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent, QPainter,
+)
 from PySide6.QtWidgets import QListWidget, QAbstractItemView, QListWidgetItem
 
-_ROLE_PATH  = 0x0100
-_ROLE_PAGES = 0x0101
-_ROLE_DONE  = 0x0102
+_ROLE_PATH   = 0x0100
+_ROLE_PAGES  = 0x0101
+_ROLE_DONE   = 0x0102
+_ROLE_LOCKED = 0x0103
+_ROLE_ERROR  = 0x0104
+
+_EMPTY_HINT = "Arrastra aquí tus PDFs\no usa «+ Agregar PDFs»"
 
 
 class FileListWidget(QListWidget):
@@ -25,15 +31,47 @@ class FileListWidget(QListWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setAlternatingRowColors(True)
         self.itemChanged.connect(self._on_item_changed)
+        self._drag_over = False
+
+    # ------------------------------------------------------------------
+    # Empty-state hint + keyboard
+    # ------------------------------------------------------------------
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().paintEvent(event)
+        if self.count() == 0 or self._drag_over:
+            painter = QPainter(self.viewport())
+            painter.setPen(QColor("#424242" if self._drag_over else "#9E9E9E"))
+            text = "Suelta los PDFs aquí" if self._drag_over else _EMPTY_HINT
+            painter.drawText(self.viewport().rect(), Qt.AlignmentFlag.AlignCenter, text)
+            painter.end()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 (Qt API)
+        key = event.key()
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        if key == Qt.Key.Key_Delete:
+            self.remove_selected()
+        elif ctrl and key == Qt.Key.Key_Up:
+            self.move_up()
+        elif ctrl and key == Qt.Key.Key_Down:
+            self.move_down()
+        else:
+            super().keyPressEvent(event)
 
     # ------------------------------------------------------------------
     # External drop (Windows Explorer → list)
     # ------------------------------------------------------------------
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
+            self._drag_over = True
+            self.viewport().update()
             event.acceptProposedAction()
         else:
             event.ignore()
+
+    def dragLeaveEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        self._drag_over = False
+        self.viewport().update()
+        super().dragLeaveEvent(event)
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         if event.mimeData().hasUrls():
@@ -42,6 +80,8 @@ class FileListWidget(QListWidget):
             event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
+        self._drag_over = False
+        self.viewport().update()
         if event.mimeData().hasUrls():
             paths = [
                 Path(u.toLocalFile())
@@ -70,6 +110,8 @@ class FileListWidget(QListWidget):
                 item.setData(_ROLE_PATH, str(p))
                 item.setData(_ROLE_PAGES, info.page_count)
                 item.setData(_ROLE_DONE, False)
+                item.setData(_ROLE_LOCKED, info.is_encrypted)
+                item.setData(_ROLE_ERROR, "")
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 item.setCheckState(Qt.CheckState.Checked)
                 item.setToolTip(str(p))
@@ -79,6 +121,8 @@ class FileListWidget(QListWidget):
                 added = True
         self.blockSignals(False)
         if added:
+            if self.currentRow() < 0:
+                self.setCurrentRow(0)
             self.files_changed.emit(self.get_ordered_files())
             self._emit_summary()
 
@@ -90,6 +134,7 @@ class FileListWidget(QListWidget):
         self.insertItem(row - 1, item)
         self.setCurrentRow(row - 1)
         self.files_changed.emit(self.get_ordered_files())
+        self._emit_summary()
 
     def move_down(self) -> None:
         row = self.currentRow()
@@ -99,6 +144,7 @@ class FileListWidget(QListWidget):
         self.insertItem(row + 1, item)
         self.setCurrentRow(row + 1)
         self.files_changed.emit(self.get_ordered_files())
+        self._emit_summary()
 
     def mark_done(self, path: str) -> None:
         self.blockSignals(True)
@@ -106,8 +152,20 @@ class FileListWidget(QListWidget):
             item = self.item(i)
             if item.data(_ROLE_PATH) == path:
                 item.setData(_ROLE_DONE, True)
+                item.setData(_ROLE_ERROR, "")
                 _update_text(item)
                 item.setForeground(QColor("#1B7A4A"))
+                break
+        self.blockSignals(False)
+
+    def mark_error(self, path: str, message: str) -> None:
+        self.blockSignals(True)
+        for i in range(self.count()):
+            item = self.item(i)
+            if item.data(_ROLE_PATH) == path:
+                item.setData(_ROLE_ERROR, message)
+                _update_text(item)
+                item.setForeground(QColor("#C62828"))
                 break
         self.blockSignals(False)
 
@@ -116,13 +174,20 @@ class FileListWidget(QListWidget):
         for i in range(self.count()):
             item = self.item(i)
             item.setData(_ROLE_DONE, False)
+            item.setData(_ROLE_ERROR, "")
             _update_text(item)
             item.setForeground(QColor("#231F20"))
         self.blockSignals(False)
 
     def remove_selected(self) -> None:
-        for item in self.selectedItems():
+        items = self.selectedItems()
+        if not items:
+            return
+        row = self.row(items[0])
+        for item in items:
             self.takeItem(self.row(item))
+        if self.count():
+            self.setCurrentRow(min(row, self.count() - 1))
         self.files_changed.emit(self.get_ordered_files())
         self._emit_summary()
 
@@ -142,6 +207,23 @@ class FileListWidget(QListWidget):
             for i in range(self.count())
             if self.item(i).checkState() == Qt.CheckState.Checked
         ]
+
+    def page_count(self, path: Path) -> int:
+        for i in range(self.count()):
+            if Path(self.item(i).data(_ROLE_PATH)) == Path(path):
+                return self.item(i).data(_ROLE_PAGES) or 0
+        return 0
+
+    def folio_offset(self, path: Path) -> int:
+        """Pages of checked files listed before *path* (correlativo numbering)."""
+        offset = 0
+        for i in range(self.count()):
+            item = self.item(i)
+            if Path(item.data(_ROLE_PATH)) == Path(path):
+                break
+            if item.checkState() == Qt.CheckState.Checked:
+                offset += item.data(_ROLE_PAGES) or 0
+        return offset
 
     def total_checked_pages(self) -> int:
         return sum(
@@ -167,6 +249,20 @@ def _update_text(item: QListWidgetItem) -> None:
     name   = Path(item.data(_ROLE_PATH)).name
     pages  = item.data(_ROLE_PAGES) or 0
     done   = item.data(_ROLE_DONE) or False
-    prefix = "✓ " if done else ""
-    pstr   = f"{pages} pág" + ("s" if pages != 1 else "")
+    locked = item.data(_ROLE_LOCKED) or False
+    error  = item.data(_ROLE_ERROR) or ""
+    if error:
+        prefix = "✗ "
+    elif done:
+        prefix = "✓ "
+    else:
+        prefix = ""
+    pstr = "protegido 🔒" if locked and not pages else (
+        f"{pages} pág" + ("s" if pages != 1 else ""))
     item.setText(f"{prefix}{name}  —  {pstr}")
+    tip = str(item.data(_ROLE_PATH))
+    if error:
+        tip += f"\n\nError: {error}"
+    elif locked:
+        tip += "\n\nProtegido con contraseña: se pedirá al foliar."
+    item.setToolTip(tip)

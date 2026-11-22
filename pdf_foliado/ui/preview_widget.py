@@ -23,31 +23,61 @@ _CORNER_ROTATE = {
 }
 
 
+_EMPTY_TEXT = (
+    "Vista previa\n\n"
+    "Agrega PDFs con el botón «+ Agregar PDFs»\n"
+    "o arrástralos a la lista de la izquierda."
+)
+
+
 class PreviewWidget(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setText("Vista previa\n(selecciona un PDF)")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet("border: 1px solid #E0E0E0; border-radius: 4px; color: #757575;")
+        self.setStyleSheet(
+            "QLabel { border: 1px solid #E0E0E0; border-radius: 4px;"
+            " color: #757575; background: #EEEEEE; }"
+        )
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(200, 240)
         self._base_pixmap: QPixmap | None = None
         self._pdf_path: Path | None = None
+        self._page_index: int = 0
         self._scale = 1.5
         # Stored params for unified repaint
         self._folio_text: str = ""
         self._stamp_params: StampParams | None = None
         self._image_params = None   # ImageStampParams | None
         self._page_rot: int = 0
+        self.clear_preview()
 
     # ------------------------------------------------------------------
-    def load_pdf(self, path: Path) -> None:
+    def clear_preview(self, message: str = _EMPTY_TEXT) -> None:
+        """Reset to the empty state (no PDF loaded)."""
+        self._base_pixmap = None
+        self._pdf_path = None
+        self._page_index = 0
+        self.setPixmap(QPixmap())
+        self.setText(message)
+
+    def current_source(self) -> tuple[Path | None, int]:
+        return self._pdf_path, self._page_index
+
+    def load_pdf(self, path: Path, page_index: int = 0) -> None:
+        """Render one page. Re-rendering the page already shown is skipped."""
+        path = Path(path)
+        if (self._base_pixmap is not None and self._pdf_path == path
+                and self._page_index == page_index):
+            return
         self._pdf_path = path
+        self._page_index = page_index
         self._page_rot = 0
         try:
             import pypdfium2 as pdfium
             doc = pdfium.PdfDocument(str(path))
             try:
-                bmp = doc[0].render(scale=self._scale)
+                idx = max(0, min(page_index, len(doc) - 1))
+                bmp = doc[idx].render(scale=self._scale)
                 img = bmp.to_pil()
             finally:
                 doc.close()
@@ -60,13 +90,19 @@ class PreviewWidget(QLabel):
             try:
                 import pikepdf
                 with pikepdf.open(str(path)) as pdf:
-                    self._page_rot = get_page_rotation(pdf.pages[0])
+                    self._page_rot = get_page_rotation(pdf.pages[idx])
             except Exception:
                 pass
             self._repaint()
         except Exception as exc:
-            self.setText(f"Error al cargar: {exc}")
             self._base_pixmap = None
+            self.setPixmap(QPixmap())
+            self.setText(
+                f"No se pudo mostrar la vista previa de\n{path.name}\n\n{exc}")
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self._repaint()
 
     def update_folio(self, folio_text: str, params: StampParams | None) -> None:
         """Update folio overlay and repaint. Pass params=None to clear."""
@@ -97,7 +133,7 @@ class PreviewWidget(QLabel):
 
         self.setPixmap(
             pix.scaled(
-                self.width() or 400, self.height() or 600,
+                max(50, self.width() - 8), max(50, self.height() - 8),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )

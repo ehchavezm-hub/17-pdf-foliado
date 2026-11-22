@@ -1,23 +1,41 @@
-╔══════════════════════════════════════════════════════════════╗
-║                     PDF Foliado                             ║
-╚══════════════════════════════════════════════════════════════╝
+==============================================================
+                       PDF Foliado
+==============================================================
 
-Descargar desde:
-https://github.com/ehchavezm-hub/17-pdf-foliado/releases
-
-
-OPCIÓN 1 — EJECUTABLE  (sin Python)
-─────────────────────────────────────
-  1. Descargar  pdf-foliado.zip
-  2. Descomprimir
-  3. Doble clic en  pdf-foliado.exe
+Pagina de descargas (siempre la ultima version):
+https://github.com/ehchavezm-hub/17-pdf-foliado/releases/tag/latest
 
 
-OPCIÓN 2 — CÓDIGO FUENTE  (requiere Python 3.13+)
-───────────────────────────────────────────────────
+VERSION 1 - EJECUTABLE (sin Python, lo mas simple)
+--------------------------------------------------------------
+  Descarga directa:
+  https://github.com/ehchavezm-hub/17-pdf-foliado/releases/download/latest/pdf-foliado.zip
+
+  1. Descomprimir
+  2. Doble clic en  pdf-foliado.exe
+
+
+VERSION 2 - PORTABLE (Python incluido, sin instalar nada)
+--------------------------------------------------------------
+  Descarga directa:
+  https://github.com/ehchavezm-hub/17-pdf-foliado/releases/download/latest/pdf-foliado-portable.zip
+
+  1. Descomprimir
+  2. Abrir la carpeta  pdf-foliado-portable
+  3. Doble clic en  INICIAR PDF Foliado.bat
+
+
+VERSION 3 - CODIGO FUENTE (requiere Python 3.13 o superior)
+--------------------------------------------------------------
   Descargar Python: https://www.python.org/downloads/
+  (marcar "Add Python to PATH" al instalar)
 
-  1. Descargar  Source code (zip)
-  2. Descomprimir
-  3. Doble clic en  iniciar.bat
-     (instala dependencias y abre la app automáticamente)
+  Descarga directa del codigo:
+  https://github.com/ehchavezm-hub/17-pdf-foliado/archive/refs/heads/main.zip
+
+  o con Git, desde cmd en la carpeta destino:
+  git clone https://github.com/ehchavezm-hub/17-pdf-foliado.git .
+
+  1. Descomprimir (si se bajo el zip)
+  2. Doble clic en  iniciar.bat
+     (instala dependencias y abre la app automaticamente)

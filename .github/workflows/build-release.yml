@@ -99,29 +99,38 @@ jobs:
           Compress-Archive -Path $dist -DestinationPath "pdf-foliado-portable.zip" -Force
           Write-Host "Portable listo."
 
+      - name: Mover etiqueta latest al commit actual
+        shell: bash
+        run: |
+          git tag -f latest
+          git push -f origin refs/tags/latest
+
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: "Última versión"
           body: |
-            ## Descargas
+            ## Tres formas de usar PDF Foliado
 
-            | Archivo | Para quién |
-            |---------|-----------|
-            | **pdf-foliado.zip** | Cualquier PC Windows — sin Python (exe) |
-            | **pdf-foliado-portable.zip** | PC sin permisos de instalación — Python incluido, solo descomprimir y ejecutar `INICIAR PDF Foliado.bat` |
+            | # | Archivo | Para quién |
+            |---|---------|-----------|
+            | 1 | **pdf-foliado.zip** | Cualquier PC Windows. Sin Python. Lo más simple. |
+            | 2 | **pdf-foliado-portable.zip** | PC sin permisos de instalación. Python incluido. |
+            | 3 | **Source code (zip)** | Código fuente. Requiere Python 3.13 o superior. |
 
-            ### Opción 1 — EXE (más simple)
-            1. Descargar `pdf-foliado.zip`
-            2. Extraer en cualquier carpeta
-            3. Ejecutar `pdf-foliado.exe`
+            ### 1 — EXE
+            1. Descargar `pdf-foliado.zip` y descomprimir
+            2. Doble clic en `pdf-foliado.exe`
 
-            ### Opción 2 — Portable con Python incluido
-            1. Descargar `pdf-foliado-portable.zip`
-            2. Extraer en cualquier carpeta
-            3. Abrir la carpeta `pdf-foliado-portable` y hacer doble clic en `INICIAR PDF Foliado.bat`
-            _(No requiere instalar Python ni librerías)_
+            ### 2 — Portable (Python incluido)
+            1. Descargar `pdf-foliado-portable.zip` y descomprimir
+            2. Abrir la carpeta `pdf-foliado-portable`
+            3. Doble clic en `INICIAR PDF Foliado.bat`
+
+            ### 3 — Código fuente
+            1. Descargar `Source code (zip)` y descomprimir (o `git clone`)
+            2. Doble clic en `iniciar.bat` (instala librerías y abre la app)
           prerelease: false
           make_latest: true
           files: |

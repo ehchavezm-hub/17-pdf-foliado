@@ -8,10 +8,12 @@ from PySide6.QtWidgets import QApplication
 from pdf_foliado.config.preferences import load, save
 from pdf_foliado.config.logging_setup import setup_logging
 from pdf_foliado.ui.main_window import MainWindow
+from pdf_foliado.ui._theme import apply_light_palette
 
 
 def run() -> None:
     app = QApplication(sys.argv)
+    apply_light_palette(app)
     app.setApplicationName("pdf-foliado")
     app.setOrganizationName("pdf-foliado")
 

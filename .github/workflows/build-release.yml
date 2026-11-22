@@ -65,20 +65,38 @@ jobs:
           Copy-Item -Path "pdf_foliado" -Destination "portable\pdf_foliado" -Recurse
           Copy-Item -Path "requirements.txt" -Destination "portable\requirements.txt"
 
-          # Crear iniciar.bat para el portable (una linea por vez para evitar problemas YAML)
-          "@echo off"                                    | Set-Content  "portable\iniciar.bat" -Encoding ASCII
-          'cd /d "%~dp0"'                               | Add-Content  "portable\iniciar.bat"
-          "set PYTHONPATH=%~dp0"                        | Add-Content  "portable\iniciar.bat"
-          "python\python.exe pdf_foliado\main.py"       | Add-Content  "portable\iniciar.bat"
-          "if errorlevel 1 ("                           | Add-Content  "portable\iniciar.bat"
-          "    echo."                                   | Add-Content  "portable\iniciar.bat"
-          "    echo ERROR al iniciar. Presiona tecla..."| Add-Content  "portable\iniciar.bat"
-          "    pause"                                   | Add-Content  "portable\iniciar.bat"
-          ")"                                           | Add-Content  "portable\iniciar.bat"
+          # Ordenar: todo el contenido interno va a la subcarpeta "app"
+          # (el ._pth usa ".." relativo a python\, que sigue apuntando a app\)
+          $dist = "pdf-foliado-portable"
+          New-Item -ItemType Directory -Path "$dist\app" -Force | Out-Null
+          Move-Item -Path "portable\*" -Destination "$dist\app"
+          Remove-Item "portable"
 
-          # Crear zip portable
+          # Lanzador en la raiz (una linea por vez para evitar problemas YAML)
+          $bat = "$dist\INICIAR PDF Foliado.bat"
+          "@echo off"                                       | Set-Content  $bat -Encoding ASCII
+          'cd /d "%~dp0app"'                               | Add-Content  $bat
+          'set "PYTHONPATH=%~dp0app"'                      | Add-Content  $bat
+          "python\python.exe pdf_foliado\main.py"          | Add-Content  $bat
+          "if errorlevel 1 ("                              | Add-Content  $bat
+          "    echo."                                      | Add-Content  $bat
+          "    echo ERROR al iniciar. Presiona una tecla..."| Add-Content  $bat
+          "    pause"                                      | Add-Content  $bat
+          ")"                                              | Add-Content  $bat
+
+          # LEEME en la raiz
+          $leeme = "$dist\LEEME.txt"
+          "PDF Foliado - version portable"                                  | Set-Content $leeme -Encoding UTF8
+          ""                                                                | Add-Content $leeme
+          "PARA ABRIR LA APLICACION:"                                       | Add-Content $leeme
+          "  Doble clic en  'INICIAR PDF Foliado.bat'"                      | Add-Content $leeme
+          ""                                                                | Add-Content $leeme
+          "La carpeta 'app' contiene Python y el programa. No la modifiques" | Add-Content $leeme
+          "ni la separes del archivo INICIAR."                              | Add-Content $leeme
+
+          # Crear zip portable (contiene la carpeta pdf-foliado-portable\)
           Write-Host "Creando pdf-foliado-portable.zip..."
-          Compress-Archive -Path "portable\*" -DestinationPath "pdf-foliado-portable.zip" -Force
+          Compress-Archive -Path $dist -DestinationPath "pdf-foliado-portable.zip" -Force
           Write-Host "Portable listo."
 
       - name: Publish Release
@@ -92,7 +110,7 @@ jobs:
             | Archivo | Para quién |
             |---------|-----------|
             | **pdf-foliado.zip** | Cualquier PC Windows — sin Python (exe) |
-            | **pdf-foliado-portable.zip** | PC sin permisos de instalación — Python incluido, solo descomprimir y ejecutar `iniciar.bat` |
+            | **pdf-foliado-portable.zip** | PC sin permisos de instalación — Python incluido, solo descomprimir y ejecutar `INICIAR PDF Foliado.bat` |
 
             ### Opción 1 — EXE (más simple)
             1. Descargar `pdf-foliado.zip`
@@ -102,7 +120,7 @@ jobs:
             ### Opción 2 — Portable con Python incluido
             1. Descargar `pdf-foliado-portable.zip`
             2. Extraer en cualquier carpeta
-            3. Doble clic en `iniciar.bat`
+            3. Abrir la carpeta `pdf-foliado-portable` y hacer doble clic en `INICIAR PDF Foliado.bat`
             _(No requiere instalar Python ni librerías)_
           prerelease: false
           make_latest: true
